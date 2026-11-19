@@ -92,6 +92,10 @@
   #chapEnd .q { color: var(--ink); font-weight: 500; }
   #chapEnd .reveal { font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--surface); cursor: pointer; color: var(--ink); }
   #chapEnd .reveal[hidden] { display: none; }
+  .clinks { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+  .clinks button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .clinks button:hover { background: var(--chip); }
+  #condBody .linked { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 6px; }
   .modenote { margin: 6px 16px 2px; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
   #card.folded #cBody { display: none; }
   .sect { font-size: 12px; font-weight: 600; color: var(--muted); margin: 18px 0 7px; display: flex; align-items: center; gap: 8px; }
@@ -276,6 +280,7 @@
   <div id="cBody">
     <p class="aim" id="chapAim" hidden></p>
     <p class="say" id="cS"></p>
+    <div class="clinks" id="condLinks" hidden></div>
     <div id="cE"></div>
     <div id="chapEnd" hidden>
       <div class="sect">Take away</div><p class="tk"></p>
@@ -1155,10 +1160,17 @@ function processSteps() {
       say: gainLoadSay, eq: gainLoadEq },
   ]);
 }
+// links from a step to the Conditions items it relies on (Story, Elements and Concepts share them by step id)
+const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', tsky: 'Sky temperature', solair: 'Sol-air temperature', sun: 'Sun', dni: 'Direct normal', dhi: 'Diffuse horizontal',
+  tair: 'Air temperature', mrt: 'Mean radiant', top: 'Operative', humIn: 'Indoor humidity', oa: 'Outdoor air', infil: 'Infiltration', people: 'People', lights: 'Lights', equip: 'Equipment',
+  sensInt: 'Sensible internal gains', latInt: 'Latent internal gains', radShare: 'Radiant share', shr: 'Sensible heat ratio' };
+const COND_OF = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+  convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
+const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
 // the Story follows CHAPTERS; a step left out of every chapter stays at the end, where checkPath() reports it
 function inChapters(all) {
   const by = new Map(all.map(x => [x.id, x]));
-  return [...CHAPTERS.flatMap(c => c.ids.filter(id => by.has(id)).map(id => ({ ...by.get(id), g: c.name }))), ...all.filter(x => chapterOf(x.id) < 0)];
+  return withCond([...CHAPTERS.flatMap(c => c.ids.filter(id => by.has(id)).map(id => ({ ...by.get(id), g: c.name }))), ...all.filter(x => chapterOf(x.id) < 0)]);
 }
 const sunposSay = r => `The solar altitude β (angle above the horizon) and azimuth φ (direction from north) define the direction of the beam, and with it the angle of incidence on every surface and the sunlit area in the room. ` +
   (r.alt > 0 ? `At this time step β = ${f1(r.alt)}° and φ = ${f0(r.az)}°; the direct normal irradiance is ${f0(r.DNI)} W/m².` : 'At this time step the sun is below the horizon.');
@@ -1282,7 +1294,7 @@ const ELEMENTS = {
 };
 const ELEMENT_NAMES = { Glass: 'Glazing', Suelo: 'Floor and slab', Muro_N: 'North wall', Muro_E: 'East wall', Muro_W: 'West wall', Muro_S: 'South wall', Cubierta: 'Roof (ceiling)', people: 'People', lights: 'Lights', equip: 'Equipment', air: 'Outdoor air', system: 'Room air and system', sky: 'Sun and sky' };
 let elementPick = 'Suelo';
-function elementSteps() { return elementPick === 'all' ? Object.values(ELEMENTS).flatMap(f => f()) : ELEMENTS[elementPick](); }
+function elementSteps() { return withCond(elementPick === 'all' ? Object.values(ELEMENTS).flatMap(f => f()) : ELEMENTS[elementPick]()); }
 
 function focusOf(step) {
   const F = new Set(), ALL = ['Suelo', 'Muro_N', 'Muro_S', 'Muro_E', 'Muro_W', 'Glass'];
@@ -1402,6 +1414,18 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
     if (vis('chapAim') || vis('chapEnd') || vis('chapBar')) bad.push('chapter cards shown outside the Story');
   } catch (e) { bad.push(`chapter cards: ${e.message}`); }
   finally { if (typeof renderChapter === 'function' && steps[cur]) renderChapter(steps[cur], cur, steps, sortMode); }
+  // links from steps to the Conditions panel
+  try {
+    const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+      convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
+    for (const [id, ks] of Object.entries(want)) { const x = st.find(y => y.id === id); if (!x || String(x.cond) !== String(ks)) bad.push(`${id}: Conditions links ${x && x.cond} instead of ${ks}`); }
+    for (const x of [...st, ...Object.values(ELEMENTS).flatMap(f => withCond(f()))]) for (const k of x.cond || []) if (!COND_LABEL[k] || !TIPS[k]) bad.push(`${x.id}: unknown Conditions item ${k}`);
+    renderConditions(row(300)); const drawn = new Set([...$('condBody').querySelectorAll('[data-tip]')].map(e => e.dataset.tip));
+    for (const k of Object.keys(COND_LABEL)) if (!drawn.has(k)) bad.push(`Conditions item ${k} not drawn`);
+    const tab = rightTab; openCondition('latInt');
+    if (rightTab !== 'cond' || tipKey !== 'latInt' || !$('condBody').querySelector('[data-tip="latInt"]')?.classList.contains('linked')) bad.push('openCondition does not open the item');
+    hideTip(); setRightTab(tab);
+  } catch (e) { bad.push(`Conditions links: ${e.message}`); }
   return bad;
 }
 let conceptPick = 'solar';
@@ -1554,6 +1578,18 @@ function go(i) {
   $('cT').textContent = s.title; $('cCount').textContent = `${cur + 1} / ${steps.length}`;
   $('railPos').textContent = `${cur + 1} / ${steps.length}`;
   renderChapter(s, cur);
+  if (linkedKey) { linkedKey = ''; hideTip(); $('condBody').querySelectorAll('.linked').forEach(e => e.classList.remove('linked')); }
+  const cl = s.cond || [];
+  $('condLinks').innerHTML = cl.length ? `<span>See in Conditions:</span>${cl.map(k => `<button data-k="${k}">${COND_LABEL[k]}</button>`).join('')}` : '';
+  $('condLinks').hidden = !cl.length;
+  $('condLinks').querySelectorAll('button').forEach(b => b.onclick = () => openCondition(b.dataset.k));
+}
+let linkedKey = '';
+function openCondition(key) {   // switch to Conditions, bring the item into view, outline it (no animation) and open its explanation
+  setRightTab('cond'); const r = S.r || row(Math.round(t * 20)); linkedKey = key;
+  renderConditions(r); condKey = `${r.i}|${season}`;
+  const el = $('condBody').querySelector(`[data-tip="${CSS.escape(key)}"]`); if (!el) return;
+  el.scrollIntoView({ block: 'nearest' }); showTip(el);
 }
 function setSeg(id, attr, val) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); }
 $('modeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; sortMode = b.dataset.mode; setSeg('modeSeg', 'mode', sortMode); steps = makeSteps(); go(0); };
@@ -1655,6 +1691,7 @@ function renderConditions(r) {
       ${k('latInt', 'Latent internal gains')}<span class="x">${kW(r.pplLat)}</span>
       ${k('radShare', 'Radiant share of the sensible (incl. visible)')}<span class="x">${sens > 1 ? f0(rad / sens * 100) + ' %' : '—'}</span>
       ${k('shr', 'Sensible heat ratio, people')}<span class="x">${r.pplSens + r.pplLat > 1 ? f2(r.pplSens / (r.pplSens + r.pplLat)) : '—'}</span></div>`;
+  if (linkedKey) $('condBody').querySelector(`[data-tip="${CSS.escape(linkedKey)}"]`)?.classList.add('linked');
 }
 
 // ================================================================ tooltips: what each quantity is, its formula and its 24 h curve
