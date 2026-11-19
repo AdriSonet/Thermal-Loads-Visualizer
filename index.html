@@ -984,6 +984,8 @@ function seriesFor(st) {
   }
   const T = st.id;
   const M = {
+    loadDef: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)], room: [],
+    designDay: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
     sunpos: [ser('I<sub>b</sub> direct normal irradiance, W/m²', r => r.DNI, C.sun), ser('I<sub>inc</sub> incident irradiance, glazing plane, W/m²', r => r.Iinc, C.grey)],
         incident: [ser('Q<sub>inc</sub> incident solar on the glazing (A<sub>g</sub> = 27 m²)', r => r.Qinc, C.sun)],
     split: [ser('Q<sub>ρ</sub> reflected', r => r.Qref, C.grey), ser('Q<sub>α</sub> absorbed in the panes', r => r.Qabs, C.cond), ser('Q<sub>τ</sub> transmitted', r => r.Qtr, C.sun)],
@@ -1091,6 +1093,21 @@ function argmax(f) { let b = 0, bv = -Infinity; for (let i = 0; i < 480; i++) { 
 function processSteps() {
   const hs = argmax(r => r.Qinc), hb = argmax(r => r.Qbeam), ho = argmax(r => r.occ * 1000 - Math.abs(r.i / 20 - 18)), hl = SB[season].peak_step / 20, hEve = 21;
   return inChapters([
+    { id: 'loadDef', g: '', title: 'What a thermal load is', t0: hl, cam: 'overview', proc: ['system'], an: [], key: ['air'],
+      say: r => `A heat gain is the rate at which heat enters or is generated in the room. The sensible load is the rate at which the system must remove sensible heat from the room air (positive, cooling) or supply it (negative, heating) to hold the air temperature. The latent load is the rate at which it must remove moisture, expressed as heat. Now: sensible ${kW(r.loadS)} (${r.loadS >= 0 ? 'cooling' : 'heating'}), latent ${kW(r.loadL)}.`,
+      eq: r => eq('Q<sub>s</sub>', 'sensible load', '', kW(r.loadS)) + eq('Q<sub>l</sub>', 'latent load', '', kW(r.loadL)) },
+    { id: 'room', g: '', title: 'The room and its constructions', t0: 12, cam: 'overview', proc: [], an: [], key: [],
+      say: r => `The room is a 12 × 8 × 4 m boarding lounge in Zaragoza: ${FLOOR_A} m² of floor and ${f0(ROOM_V)} m³ of air. Its only glazing is a 9 × 3 m curtain wall facing south (${AG} m²). The walls are concrete with external insulation, the roof is light and insulated, and the floor is a concrete slab on insulation over the ground. The U-value, 1/ΣR including the surface resistances, is the heat conducted per square metre and kelvin of temperature difference in steady state.`,
+      eq: r => { const L = layersR(SB.face_construction.Muro_N);
+        return eq('U<sub>wall</sub>', '1 / (R<sub>si</sub> + Σ d/λ + R<sub>se</sub>)', `1 / (0,13 + ${f2(L)} + 0,04)`, `${f2(uValue(SB.face_construction.Muro_N))} W/m²K`) +
+          eq('U<sub>roof</sub>', 'light roof, 70 mm PIR', '', `${f2(uValue(SB.face_construction.Cubierta))} W/m²K`) +
+          eq('U<sub>floor</sub>', 'slab on XPS, without the ground', '', `${f2(uValue(SB.face_construction.Suelo))} W/m²K`) +
+          eq('U<sub>g</sub>', 'glazing, effective value from the simulation', '', `${f1(U_G)} W/m²K`); } },
+    { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
+      say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
+        return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
+      eq: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
+        return eq('Q<sub>s,peak</sub>', `largest sensible load, at ${stepLabel(SB[season].peak_step)}`, '', kW(pk.loadS)) + eq('T<sub>out</sub>', 'outdoor air, lowest – highest', '', `${f1(T[0])} – ${f1(T[1])} °C`); } },
     { id: 'sunpos', g: 'Short-wave radiation', title: 'Solar position', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'],
       say: sunposSay,
       eq: r => eq('β, φ', 'solar altitude and azimuth', '', `${f1(r.alt)}° · ${f0(r.az)}°`) + eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) },
@@ -1167,6 +1184,14 @@ const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', t
 const COND_OF = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
   convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
 const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
+// steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
+const layersR = name => SB.constructions[name].layers.reduce((a, l) => a + l.thickness / SB.materials[l.material].conductivity, 0);
+function uValue(name) {
+  const face = Object.keys(SB.face_construction).find(k => SB.face_construction[k] === name);
+  const [rsi, rse] = face === 'Cubierta' ? [.10, .04] : face === 'Suelo' ? [.17, 0] : [.13, .04];
+  return 1 / (rsi + layersR(name) + rse);
+}
+const dayRange = f => { let lo = Infinity, hi = -Infinity; for (let i = 0; i < 480; i++) { const v = f(row(i)); if (v < lo) lo = v; if (v > hi) hi = v; } return [lo, hi]; };
 // the Story follows CHAPTERS; a step left out of every chapter stays at the end, where checkPath() reports it
 function inChapters(all) {
   const by = new Map(all.map(x => [x.id, x]));
@@ -1335,7 +1360,7 @@ const CONCEPTS = [
 ];
 // the lecture: chapters in the order energy flows, each with its opening, closing and check question
 const CHAPTERS = [
-  { k: 'problem', name: 'The problem', ids: [],
+  { k: 'problem', name: 'The problem', ids: ['loadDef', 'room', 'designDay'],
     aim: 'What a thermal load is, the room we study and the day we design for.',
     takeaway: 'The sensible load is the heat the system must remove from the air to hold its temperature; it is calculated for a design day.',
     q: 'Why is the room studied on its peak day and not on an average day?',
@@ -1414,6 +1439,13 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
     if (vis('chapAim') || vis('chapEnd') || vis('chapBar')) bad.push('chapter cards shown outside the Story');
   } catch (e) { bad.push(`chapter cards: ${e.message}`); }
   finally { if (typeof renderChapter === 'function' && steps[cur]) renderChapter(steps[cur], cur, steps, sortMode); }
+  // chapter 0: U-values in a plausible range, the design day opens on the peak
+  try {
+    const uw = uValue(SB.face_construction.Muro_N), ur = uValue(SB.face_construction.Cubierta);
+    if (!(uw > .3 && uw < .6)) bad.push(`wall U = ${uw}`); if (!(ur > .25 && ur < .45)) bad.push(`roof U = ${ur}`);
+    const keepS = season; season = 'summer'; const dd = processSteps().find(x => x.id === 'designDay'); season = keepS;
+    if (!dd || dd.t0 !== SB.summer.peak_step / 20) bad.push('designDay does not open on the summer peak');
+  } catch (e) { bad.push(`chapter 0: ${e.message}`); }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
