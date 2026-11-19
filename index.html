@@ -986,6 +986,7 @@ function seriesFor(st) {
   const M = {
     loadDef: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)], room: [],
     designDay: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
+    gainsAmount: [ser('Q<sub>people</sub> people, sensible + latent', r => r.pplSens + r.pplLat, C.lw), ser('P<sub>lights</sub> lights', r => r.litVis + r.litRad + r.litConv + r.litRet, C.sun), ser('P<sub>equip</sub> equipment', r => r.eqRad + r.eqConv, C.grey)],
     outdoor: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load)],
     skySolair: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>sky</sub> sky, °C', r => r.Tsky, '#4b6ba9'), ser('T<sub>sa</sub> sol-air, roof (est.), °C', solAirRoof, C.sun), ser('T<sub>so</sub> roof outside face, °C', r => r.TsoRoof, C.ink)],
     sunpos: [ser('I<sub>b</sub> direct normal irradiance, W/m²', r => r.DNI, C.sun), ser('I<sub>inc</sub> incident irradiance, glazing plane, W/m²', r => r.Iinc, C.grey)],
@@ -1052,6 +1053,9 @@ const ABOUT = {
   'Q_{OA,0}': ['Outdoor-air load without recovery', 'Outdoor-air load without heat recovery, ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>). Its difference from the load after recovery is the recovered heat.'],
   'Q_{inf}': ['Infiltration', 'Sensible heat of the outdoor air entering through gaps in the envelope. It bypasses the heat recovery and acts directly on the room air.'],
   'Q_{l}': ['Latent load', 'The rate of moisture removal required of the system, expressed as heat.'],
+  'Q_{people}': ['People', 'Sensible plus latent heat released by the occupants; it follows the occupancy schedule.'],
+  'P_{lights}': ['Lighting power', 'Electric power of the lamps, all released as heat in the room; it follows the lighting schedule.'],
+  'P_{equip}': ['Equipment power', 'Electric power of screens, kiosks and other equipment, all released as heat; it follows the equipment schedule.'],
   'T_{out}': ['Outdoor air temperature', 'Dry-bulb temperature of the outdoor air, measured in the shade.'],
   'T_{air}': ['Room air temperature', 'Temperature of the room air, taken as well mixed; the quantity the system controls.'],
   'T_{sky}': ['Sky temperature', 'Temperature of a black body that would emit the same long-wave radiation as the sky. It is not the sol-air temperature.'],
@@ -1118,6 +1122,11 @@ function processSteps() {
       eq: r => { const a = ROOF_OUT.solar_absorptance * r.incRoof / H_O, l = ROOF_OUT.thermal_absorptance * SIGMA * ((r.Tout + 273.15) ** 4 - (r.Tsky + 273.15) ** 4) / H_O;
         return eq('T<sub>sa</sub>', '≈ T<sub>out</sub> + α·I/h<sub>o</sub> − ε·σ·(T<sub>out</sub>⁴ − T<sub>sky</sub>⁴)/h<sub>o</sub>', `${f1(r.Tout)} + ${f1(a)} − ${f1(l)}`, `${f1(solAirRoof(r))} °C`, 'est') +
           eq('T<sub>sky</sub>', 'sky temperature', '', `${f1(r.Tsky)} °C`) + eq('T<sub>so,roof</sub>', 'roof outside face, simulated', '', `${f1(r.TsoRoof)} °C`); } },
+    { id: 'gainsAmount', g: '', title: 'People, lights and equipment: amount and schedule', t0: ho, cam: 'people', proc: ['lwPeople', 'lwLights', 'lwEquip'], an: ['people'], key: ['lw'],
+      say: r => { const lit = r.litVis + r.litRad + r.litConv + r.litRet, eqp = r.eqRad + r.eqConv, n = r.occ;
+        return `Internal gains are the heat released inside the room by its occupants, lighting and equipment. Their amount follows the occupancy of the space and the schedules of use, so it changes through the day. Each occupant releases sensible and latent heat according to activity; lights and equipment release their electric power as heat. Now: ${n > .05 ? `${f0(n)} people (${f1(FLOOR_A / n)} m² per person)` : 'no occupants'}, lights ${f1(lit / FLOOR_A)} W/m², equipment ${f1(eqp / FLOOR_A)} W/m².`; },
+      eq: r => { const n = r.occ; return eq('n', 'occupants', '', n > .05 ? `${f0(n)}` : '—') + eq('q<sub>s</sub>, q<sub>l</sub>', 'sensible and latent heat per person', '', n > .05 ? `${f0(r.pplSens / n)} and ${f0(r.pplLat / n)} W` : '—') +
+        eq('P<sub>lights</sub>', 'lighting power', '', Wf(r.litVis + r.litRad + r.litConv + r.litRet)) + eq('P<sub>equip</sub>', 'equipment power', '', Wf(r.eqRad + r.eqConv)); } },
     { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
       say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
         return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
@@ -1196,7 +1205,7 @@ function processSteps() {
 const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', tsky: 'Sky temperature', solair: 'Sol-air temperature', sun: 'Sun', dni: 'Direct normal', dhi: 'Diffuse horizontal',
   tair: 'Air temperature', mrt: 'Mean radiant', top: 'Operative', humIn: 'Indoor humidity', oa: 'Outdoor air', infil: 'Infiltration', people: 'People', lights: 'Lights', equip: 'Equipment',
   sensInt: 'Sensible internal gains', latInt: 'Latent internal gains', radShare: 'Radiant share', shr: 'Sensible heat ratio' };
-const COND_OF = { outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+const COND_OF = { gainsAmount: ['people', 'lights', 'equip'], outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
   convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
 const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
 // steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
@@ -1390,7 +1399,7 @@ const CHAPTERS = [
     takeaway: 'Glazing transmits sun and conducts heat with no lag; opaque elements conduct with a lag that grows with mass; infiltration acts directly on the air.',
     q: 'Why does heat leave through the glazing on a summer night when the outdoor air is warmer than the room?',
     a: 'The outer pane radiates to a sky much colder than the air and becomes colder than the outdoor air.' },
-  { k: 'gains', name: 'Internal gains', ids: ['radPeople', 'radLights', 'radEquip', 'convInt', 'latent'],
+  { k: 'gains', name: 'Internal gains', ids: ['gainsAmount', 'radPeople', 'radLights', 'radEquip', 'convInt', 'latent'],
     aim: 'The heat from people, lights and equipment, and how it splits into radiant, convective and latent parts.',
     takeaway: 'Convective gains are load at once; radiant gains reach the air only after surfaces absorb them; latent gains change humidity, not temperature.',
     q: 'Two rooms have 2 kW of equipment each: screens (50 % radiant) in one, fan heaters (almost all convective) in the other. Which has the later load peak?',
