@@ -16,9 +16,10 @@ Then go to <http://localhost:5181/>. Three.js loads from a CDN, so an internet c
 
 ## Using it
 
-- **Story**: the processes in the order energy flows through the room.
-- **Elements**: pick one element (glazing, floor, a wall, people…) and step through every process it takes part in.
-- **Concepts**: grouped by idea, with 2D sections of the slab, a wall and the glazing.
+- **Story** is the lecture: nine chapters from A to Z (the problem, outdoor conditions, envelope, internal gains, surfaces, storage, room air, system, results). Each chapter opens with what it covers and closes with what to take away and a check question; the answer appears on click.
+- **Elements** is the exercise: pick one element (glazing, floor, a wall, people…) and follow every process it takes part in through the day.
+- **Concepts** is the review: one idea at a time, with 2D sections of the slab, a wall and the glazing.
+- Under each step, **See in Conditions** opens the matching item in the Conditions tab with its explanation.
 - Right column: surface temperature scale, the **Room balance** (per time step or per day) and the **Conditions** (outdoors, indoors, internal gains and their radiant, convective, visible and latent shares).
 - Keys: ← → steps, Space play/pause, F full screen, L navigator.
 

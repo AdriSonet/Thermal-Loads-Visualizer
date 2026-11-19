@@ -1441,6 +1441,12 @@ const CONCEPTS = [
     ids: ['glassCond', 'opaque', 'vent', 'infil'] },
   { k: 'load', name: 'Heat gain and cooling load', def: 'Heat gain and load differ by the heat stored in the construction.',
     ids: ['floorbal', 'airbal', 'gainload'] },
+  { k: 'outdoor', name: 'Outdoor conditions', def: 'Sun, air temperature, humidity and sky temperature set every exchange of the envelope.',
+    ids: ['sunpos', 'outdoor', 'skySolair'] },
+  { k: 'moist', name: 'Moisture and the coil', def: 'Moisture enters with people and outdoor air; the coil removes it together with the sensible load.',
+    ids: ['latent', 'moisture', 'coil'] },
+  { k: 'sizing', name: 'Design day and sizing', def: 'The peak loads of the design days size the system; comfort is judged on the operative temperature.',
+    ids: ['designDay', 'peak', 'seasons', 'comfort'] },
 ];
 // the lecture: chapters in the order energy flows, each with its opening, closing and check question
 const CHAPTERS = [
@@ -1549,6 +1555,9 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
       if (Math.abs(a - b) > .02 * Math.abs(b)) bad.push(`${se}: daily balance does not close (${f0(a / 20)} vs ${f0(b / 20)} Wh)`); }
     season = keepS;
   } catch (e) { bad.push(`chapter 8: ${e.message}`); }
+  // concepts that cover the new chapters
+  for (const [k, ids] of [['outdoor', ['sunpos', 'outdoor', 'skySolair']], ['moist', ['latent', 'moisture', 'coil']], ['sizing', ['designDay', 'peak', 'seasons', 'comfort']]]) {
+    const c = CONCEPTS.find(x => x.k === k); if (!c || String(c.ids) !== String(ids)) bad.push(`concept ${k} missing or with other steps`); }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
