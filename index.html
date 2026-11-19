@@ -363,6 +363,7 @@ const CELL = .25, NX = W / CELL, NZ = D / CELL;
 // ================================================================ the data (EnergyPlus timestep, held per step)
 let season = 'summer';
 const FACES = ['Suelo', 'Muro_N', 'Muro_E', 'Muro_S', 'Muro_W', 'Cubierta'];
+const OPAQUE = ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W', 'Cubierta'];   // the opaque envelope above ground
 const floorCons = SB.constructions[SB.face_construction.Suelo];
 const floorMat = floorCons.layers.map(l => SB.materials[l.material]);
 const CONC_T = floorCons.layers.reduce((s, l) => /hormigon/i.test(l.material) ? s + 96 * l.thickness * SB.materials[l.material].density / 1000 : s, 0);   // t of concrete in the slab
@@ -382,6 +383,8 @@ function row(i) {
     infil: g(z.infGain) - g(z.infLoss), infFlow: g(z.infFlow),
     Tsky: g(si.Tsky), Top: g(z.Top), RH: g(z.RH), loadS: g(z.zSensCool) - g(z.zSensHeat), loadL: g(z.zLatCool) - g(z.zLatHeat),
     surfConv: g(z.surfConv), intConv: g(z.intConv), oaTransfer: g(z.oaTransfer), sysConv: g(z.sysConv), airStore: g(z.airStore), S: {} };
+  // the simulation's outdoor-air load is taken from outdoor conditions, before the recovery: split it by hand (matches it within 0,2 %)
+  const mcpOA = 1.2 * r.oaFlow * 1006; r.oaNoRec = mcpOA * (r.Tout - r.Tair); r.oaAfter = mcpOA * (r.Tmix - r.Tair); r.oaRec = r.oaNoRec - r.oaAfter;   // so the three always add up
   r.Qinc = r.Iinc * AG; r.Qref = Math.max(0, r.Qinc - r.Qtr - r.Qabs);
   r.incRoof = sf.incOut.Cubierta[i]; r.TsoRoof = sf.Tout.Cubierta[i];   // irradiance on the roof and its simulated outside-face temperature
   for (const f of FACES) r.S[f] = { T: sf.Tin[f][i], sol: sf.solIn[f][i], ir: sf.intRad[f][i], lw: sf.lw[f][i], conv: sf.conv[f][i], cond: sf.cond[f][i] };
@@ -790,9 +793,9 @@ const PROC = {
       });
     });
   },
-  wallCond(only) {  // conduction at the inside face of the walls: into the wall (stored) or out of it
+  wallCond(only) {  // conduction at the inside face of the walls and roof: into the construction (stored) or out of it
     const r = S.r;
-    for (const k of ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W']) {
+    for (const k of OPAQUE) {
       if (!SURF[k].vis() || (only && !only.includes(k))) continue; const q = r.S[k].cond, n = Math.min(24, Math.round(Math.abs(q) / SCALE.cond)), into = q < 0;
       for (let j = 0; j < n; j++) { const p = SURF[k].pt(j * 13 + 5), b = p.clone().addScaledVector(SURF[k].n, -.28), a = p.clone().addScaledVector(SURF[k].n, .35);
         pulses(thick, into ? [a, p, b] : [b, p, a], MARK.ink, 1, .22, .6, .25, j * .41); }
@@ -911,10 +914,10 @@ const GLOSS = {
   'θ': 'angle of incidence to the glazing normal', 'A_{g}': 'glazing area, 27 m²', 'A_{sunlit}': 'sunlit floor area, m²', 'A': 'surface area, m²',
   'Q_{inc}': 'solar radiation incident on the glazing, W', 'Q_{beam}': 'transmitted beam radiation, W', 'Q_{sens}': 'sensible heat per person, W', 'Q_{conv}': 'convective heat flow, W',
   'Q_{lat}': 'latent heat flow, W', 'Q_{lw}': 'net long-wave flow, W', 'Q_{cond}': 'conduction, W', 'Q_{vis}': 'visible radiation, W', 'Q_{rad}': 'radiant heat, W', 'Q_{ret}': 'heat to the return air, W',
-  'Q_{gain}': 'instantaneous heat gain, W', 'Q_{st}': 'heat storage rate, W', 'Q_{inf}': 'infiltration heat flow, W',
+  'Q_{gain}': 'sun + internal sensible gains, W', 'Q_{env}': 'glazing conduction + infiltration, W', 'Q_{air}': 'heat stored in the room air, W', 'Q_{cv,surf}': 'convection from the surfaces to the air, W', 'Q_{cv,int}': 'convective internal gains, W', 'Q_{sys}': 'heat the system puts into the air (− = removes), W', 'Q_{cd}': 'inside-face conduction of walls, roof and slab, W', 'Q_{st}': 'heat storage rate, W', 'Q_{inf}': 'infiltration heat flow, W',
   'q_{patch}': 'direct-beam flux on the sunlit floor area, W/m²', 'q_{abs}': 'absorbed flux, W/m²', 'q_{lw}': 'net long-wave flux, W/m²', 'q_{conv}': 'convective flux, W/m²', 'q_{cond}': 'conductive flux, W/m²', 'q̄': 'mean absorbed flux over the floor, W/m²',
   'τ': 'solar transmittance of the glazing', 'α_{s}': 'solar absorptance of the floor', 'α': 'solar absorptance of the panes', 'N_{i}': 'inward-flowing fraction of the absorbed solar',
-  'ε': 'long-wave emissivity', 'σ': 'Stefan–Boltzmann constant, 5,67·10⁻⁸ W/m²K⁴', 'F': 'view factor',
+  'ε': 'long-wave emissivity', 'ε_{g}': 'emissivity of the glass, 0,84', 'ε_{f}': 'emissivity of the floor tile, 0,9', 'σ': 'Stefan–Boltzmann constant, 5,67·10⁻⁸ W/m²K⁴', 'F': 'view factor',
   'T_{mrt}': 'mean radiant temperature of the room, K', 'T_{s}': 'surface temperature, K', 'T_{g}': 'inside temperature of the glazing, K', 'T_{f}': 'floor temperature, K', 'T_{w}': 'wall temperature, K',
   'T_{b}': 'clothing surface temperature, K', 'T_{out}': 'outdoor air temperature, °C', 'T_{in}': 'indoor air temperature, °C', 'T_{air}': 'room air temperature, °C', 'T_{mix}': 'outdoor air after heat recovery, °C', 'T_{floor}': 'mean floor temperature, °C',
   'h_{c}': 'convective heat transfer coefficient, W/m²K', 'h_{r}': 'radiative heat transfer coefficient, W/m²K', 'h_{fg}': 'latent heat of vaporisation, 2.454 kJ/kg',
@@ -934,7 +937,7 @@ function glossFor(lhs, def) {
 }
 const isRelation = d => /[·\/=Σ+−(⁴×]/.test(String(d).replace(/<[^>]+>/g, ''));
 const eq = (lhs, def, num, res, src = 'ep') => isRelation(def)
-  ? `<div class="eq"><span class="lhs">${sym(lhs)}</span><span class="rhs">= ${def}${tag(src)}</span><span class="res">${res}</span>${num ? `<span class="sub">= ${num}</span>` : ''}${glossFor(lhs, def)}</div>`
+  ? `<div class="eq"><span class="lhs">${sym(lhs)}</span><span class="rhs">${/^≈/.test(def) ? '' : '= '}${def}${tag(src)}</span><span class="res">${res}</span>${num ? `<span class="sub">= ${num}</span>` : ''}${glossFor(lhs, def)}</div>`
   : `<div class="kpi"><div class="s">${sym(lhs)}</div><div class="v">${res}</div><div class="l">${def}${tag(src)}</div></div>`;
 const KEY = { sun: ['#f2b600', 'short-wave (sunlight)'], lw: ['#a0124f', 'long-wave (heat) radiation'], ink: ['#1b1b1b', 'conduction'], air: ['linear-gradient(90deg,#2f6fc0,#f3f1ec,#ef8a4b)', 'air, coloured by its temperature'], vap: ['#1f8a99', 'water vapour'] };
 
@@ -947,7 +950,7 @@ function seriesFor(st) {
     if (st.title.startsWith('All together')) return all;
     if (st.title.startsWith('Incident solar on the glazing')) return [ser('Q<sub>inc</sub> incident solar on the glazing (A<sub>g</sub> = 27 m²)', r => r.Qinc, C.sun)];
     if (st.title.startsWith('Reflected')) return [ser('Q<sub>ρ</sub> reflected', r => r.Qref, C.grey), ser('Q<sub>α</sub> absorbed in the panes', r => r.Qabs, C.cond), ser('Q<sub>τ</sub> transmitted', r => r.Qtr, C.sun)];
-    if (st.title.startsWith('Conduction through')) return [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond)];
+    if (st.title.startsWith('Conduction through')) return [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond), ser('Q<sub>cd,g,est</sub> textbook U·A·ΔT', r => U_G * AG * (r.Tout - r.Tair), C.grey)];
     if (st.title.startsWith('Storage')) return [ser('Q<sub>st</sub> storage rate in the slab', r => r.Qst, C.cond)];
     if (st.title.startsWith('Release')) return [ser('Q<sub>cd</sub> out of the slab', F(s => s.cond), C.cond), ser('Q<sub>cv</sub> floor → air', F(s => -s.conv), C.conv)];
     return all.filter((_, j) => ['sol', 'ir', 'lw', 'conv', 'cond'][j] === st.hl);
@@ -972,12 +975,13 @@ function seriesFor(st) {
     'People, lights and equipment heat the air': [ser('Q<sub>cv,int</sub> convective internal gains', r => r.intConv, C.conv)],
     'Convection to the air': [ser('Q<sub>conv</sub> convective', r => r.pplConv, C.conv)],
     'People release moisture': [ser('Q<sub>lat</sub> latent', r => r.pplLat, C.vap)], 'Moisture': [ser('Q<sub>lat</sub> latent', r => r.pplLat, C.vap)],
-    'Conduction through the glass': [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond)],
-    'Ventilation with heat recovery': [ser('Q<sub>rec</sub> recovered sensible', r => r.hrSens, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaSens, C.load)],
-    'Ventilation through the heat recovery': [ser('Q<sub>rec</sub> recovered sensible', r => r.hrSens, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaSens, C.load)],
+    'Conduction through the glass': [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond), ser('Q<sub>cd,g,est</sub> textbook U·A·ΔT', r => U_G * AG * (r.Tout - r.Tair), C.grey)],
+    'Conduction through walls and roof': [ser('Q<sub>cd,roof</sub> roof → room', opRoof, C.cond), ser('Q<sub>cd,walls</sub> walls → room', opWalls, C.ink), ser('Q<sub>cd,g</sub> glazing, for comparison', r => r.gCond, C.grey)],
+    'Ventilation with heat recovery': [ser('Q<sub>OA,0</sub> outdoor-air load without recovery', r => r.oaNoRec, '#a9bfd8'), ser('Q<sub>rec</sub> recovered sensible', r => r.oaRec, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaAfter, C.load)],
+    'Ventilation through the heat recovery': [ser('Q<sub>OA,0</sub> outdoor-air load without recovery', r => r.oaNoRec, '#a9bfd8'), ser('Q<sub>rec</sub> recovered sensible', r => r.oaRec, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaAfter, C.load)],
     'Infiltration': [ser('Q<sub>inf</sub> infiltration, sensible', r => r.infil, C.load)],
     'The air heat balance': [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)],
-    'Heat gain is not cooling load': [ser('Q<sub>gain</sub> instantaneous heat gain', r => r.Qtr + r.pplSens + r.litVis + r.litRad + r.litConv + r.eqRad + r.eqConv, C.cond), ser('Q<sub>s</sub> sensible cooling load', r => r.loadS, C.load)],
+    'Heat gain is not cooling load': [ser('Q<sub>gain</sub> sun + internal gains', gainSI, C.cond), ser('Q<sub>env</sub> glazing conduction + infiltration', envI, C.grey), ser('Q<sub>cd</sub> from walls, roof and slab (− = stored)', massCd, C.ink), ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
   };
   if (M[T]) return M[T];
   if (st.g === 'Lights') return T === 'Visible light' ? [ser('Q<sub>vis</sub> visible', r => r.litVis, C.sun)] : T === 'Heat radiation' ? [ser('Q<sub>rad</sub> radiant', r => r.litRad, C.lw)] : T === 'Convection' ? [ser('Q<sub>conv</sub> convective', r => r.litConv, C.conv)] : [ser('Q<sub>vis</sub> visible', r => r.litVis, C.sun), ser('Q<sub>rad</sub> radiant', r => r.litRad, C.lw), ser('Q<sub>conv</sub> convective', r => r.litConv, C.conv)];
@@ -1003,7 +1007,10 @@ const ABOUT = {
   'Q_{lw}': ['Net long-wave radiation', 'Heat radiation exchanged with the other room surfaces, proportional to <i>T</i>⁴. Positive: the face receives more than it emits, because what it sees is warmer than it is.'],
   'Q_{cv}': ['Convection', 'Heat carried between the face and the air touching it, <i>h</i><sub>c</sub>·<i>A</i>·(<i>T</i><sub>s</sub> − <i>T</i><sub>air</sub>). This is where a surface gain becomes load on the air. The legend gives the sign.'],
   'Q_{cd}': ['Conduction', 'Heat moving through the construction, driven by the temperature gradient across its layers. Going into the mass, it is stored; coming out, it returns to the face hours later.'],
-  'Q_{cd,g}': ['Conduction through the glazing', `Heat crossing the glazing because the indoor and outdoor temperatures differ, about <i>U</i>·<i>A</i>·(<i>T</i><sub>out</sub> − <i>T</i><sub>in</sub>). Glass is thin and light, so there is no storage and no delay.`],
+  'Q_{cd,roof}': ['Conduction through the roof', `Heat arriving at the ceiling's inside face from the roof. The roof is light (membrane, 70 mm PIR, OSB), so it follows the sun-heated outside face with little delay, damped by the insulation. Positive heats the room.`],
+  'Q_{cd,walls}': ['Conduction through the walls', `Heat arriving at the inside faces of the four walls. Insulation outside 200 mm of concrete: the concrete stores what crosses, so the flow is small and arrives hours later. Positive heats the room.`],
+  'Q_{cd,g,est}': ['Textbook estimate', 'U·A·ΔT with the glazing U of about 1,7 W/m²K. Good on overcast nights; it ignores the sky and the sun on the panes.'],
+  'Q_{cd,g}': ['Conduction through the glazing', `Heat crossing the glazing to the room, roughly <i>U</i>·<i>A</i>·(<i>T</i><sub>out</sub> − <i>T</i><sub>in</sub>), but the simulation also counts the outer pane radiating to the sky and the sun absorbed in the panes, so on clear nights it can flow out even when it is warmer outside. Glass is thin and light: no storage, no delay.`],
   'Q_{st}': ['Storage rate in the slab', 'How fast the heat content of the slab changes: Σ ρ·c·Δx·dT/dt over its layers. Positive: the slab is charging. Negative: it is giving heat back.'],
   'Q_{rad}': ['Radiant gain', 'The share of a source emitted as heat radiation. It reaches the air only after warming the room surfaces, so it arrives later.'],
   'Q_{vis}': ['Visible light', 'Light from the lamps. It becomes heat wherever a surface absorbs it, like sunlight.'],
@@ -1012,11 +1019,13 @@ const ABOUT = {
   'Q_{cv,int}': ['Convective internal gains', 'The convective share of people, lights and equipment, which goes straight into the air.'],
   'Q_{lat}': ['Latent gain', 'Heat carried by the water vapour that people release. It does not raise the air temperature; the system removes it by drying the air.'],
   'Q_{rec}': ['Recovered sensible heat', 'Heat exchanged between the incoming outdoor air and the exhaust air, ṁ·c<sub>p</sub>·(<i>T</i><sub>out</sub> − <i>T</i><sub>mix</sub>). In summer it pre-cools the fresh air; in winter it pre-heats it.'],
-  'Q_{OA}': ['Outdoor-air load after recovery', 'What is left of the ventilation load once the recovery has done its part. The system handles it; it is not a load on the room.'],
+  'Q_{OA}': ['Outdoor-air load after recovery', 'What is left of the ventilation load once the recovery has done its part, ṁ·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>in</sub>). The system handles it; it is not a load on the room.'],
+  'Q_{OA,0}': ['Outdoor-air load without recovery', 'What the system would have to handle if the fresh air came straight in, ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>). The gap between this curve and the one after recovery is what the recovery saves.'],
   'Q_{inf}': ['Infiltration', 'Outdoor air leaking in through the façade, with no recovery. It acts directly on the room air.'],
-  'Q_{s}': ['Sensible load', 'The heat the system must remove (positive) or add (negative) to hold the room air temperature.'],
   'Q_{l}': ['Latent load', 'The moisture the system must remove, expressed as heat.'],
-  'Q_{gain}': ['Instantaneous heat gain', 'Everything entering the room at this moment: transmitted sun plus people, lights and equipment. Its radiant part goes into the surfaces first.'],
+  'Q_{gain}': ['Sun and internal gains', 'Transmitted sun plus the sensible heat of people, lights and equipment, at this moment. Their radiant part lands on surfaces first and reaches the air later.'],
+  'Q_{env}': ['Glazing conduction and infiltration', 'Heat that crosses the glass or comes in with leaking air. It has no mass to wait in, so it is load at once (negative when it is colder outside).'],
+  'Q_{s}': ['Sensible load', 'The heat the system must remove (positive) or add (negative) to hold the room air temperature. It equals the three other curves added up, plus the little the air itself stores: Q<sub>s</sub> = Q<sub>gain</sub> + Q<sub>env</sub> + Q<sub>cd</sub> − Q<sub>air</sub>.'],
   'Q_{load}': ['Sensible load on the system', 'The heat the system must remove (positive) or add (negative) to hold the room air temperature.'],
 };
 function aboutOf(name) {   // look a series up by its symbol; 'Q_{lw,roof}' falls back to 'Q_{lw}'
@@ -1080,7 +1089,7 @@ function processSteps() {
         <div class="eq"><span class="num">conv &lt; 0: the floor heats the air · cond &lt; 0: heat goes down into the slab · lw &gt; 0: it receives net long-wave</span></div>`; } },
     { g: 'Conduction and storage', title: 'Conduction into the slab', t0: hb, cam: 'cut', proc: ['floorCond'], an: ['cut'], key: ['ink'],
       say: r => `In the cut, the simulated temperatures through tile, mortar, concrete and XPS. Heat flows down the gradient, from hot to cold.`,
-      eq: r => eq('q<sub>top</sub>', '−k·ΔT/Δx (tile layer)', `−${f2(r.kTop)}·(${f2(r.fT[r.fT.length - 1])} − ${f2(r.fT[r.fT.length - 2])}) / ${f3(r.dxTop)}`, `${f0(-r.qTop)} W/m² down`) + eq('Q<sub>cond</sub>', 'inside-face conduction × A', '', Wf(r.S.Suelo.cond)) },
+      eq: r => eq('q<sub>top</sub>', '−k·ΔT/Δx (tile layer, + upwards)', `−${f2(r.kTop)}·(${f2(r.fT[r.fT.length - 1])} − ${f2(r.fT[r.fT.length - 2])}) / ${f3(r.dxTop)}`, `${f0(r.qTop)} W/m² · ${r.qTop >= 0 ? 'up, out of the slab' : 'down, into the slab'}`) + eq('Q<sub>cond</sub>', 'inside-face conduction × A', '', Wf(r.S.Suelo.cond)) },
     { g: 'Conduction and storage', title: 'Storage in the mass', t0: 8, t1: 18, cam: 'cut', proc: ['floorCond'], an: ['cut'], key: ['ink'],
       say: r => `The slab warms a fraction of a degree, but over ${f0(CONC_T)} t of concrete. That is energy the room has gained and the air has not felt yet.`,
       eq: r => eq('Q<sub>st</sub>', 'A·Σ ρ·c·Δx·dT/dt (slab nodes)', `96 m² · Σ<sub>${N_NODES} nodes</sub> … per ${SB[season].step_min * 60} s`, (r.Qst >= 0 ? '+' : '') + Wf(r.Qst)) },
@@ -1089,7 +1098,7 @@ function processSteps() {
       eq: r => eq('Q<sub>cond,floor</sub>', 'heat coming up out of the slab', '', Wf(r.S.Suelo.cond)) + eq('Q<sub>conv,floor</sub>', 'floor → air', '', Wf(-r.S.Suelo.conv)) },
     { g: 'Long-wave radiation', title: 'Surfaces exchange heat radiation', t0: hs, cam: 'room', proc: ['lwNet'], an: ['temps'], key: ['lw'],
       say: r => `Each surface radiates as T⁴. Net, heat goes from the hotter surfaces to the colder ones; here the ${r.TgIn > r.S.Suelo.T ? 'hot glass is the main emitter' : 'cold glass is the main sink'}.`,
-      eq: r => eq('q<sub>glass→floor</sub>', 'ε·σ·(T<sub>g</sub>⁴ − T<sub>f</sub>⁴)', `0,84·5,67·10⁻⁸·(${f1(r.TgIn + 273.15)}⁴ − ${f1(r.S.Suelo.T + 273.15)}⁴)`, `${f0(.84 * SIGMA * ((r.TgIn + 273.15) ** 4 - (r.S.Suelo.T + 273.15) ** 4))} W/m²`, 'est') },
+      eq: r => eq('q<sub>glass→floor</sub>', 'σ·(T<sub>g</sub>⁴ − T<sub>f</sub>⁴) / (1/ε<sub>g</sub> + 1/ε<sub>f</sub> − 1), if they faced each other fully', `5,67·10⁻⁸·(${f1(r.TgIn + 273.15)}⁴ − ${f1(r.S.Suelo.T + 273.15)}⁴) / (1/0,84 + 1/0,9 − 1)`, `${f0(SIGMA * ((r.TgIn + 273.15) ** 4 - (r.S.Suelo.T + 273.15) ** 4) / (1 / .84 + 1 / .9 - 1))} W/m²`, 'est') },
     { g: 'Long-wave radiation', title: 'People radiate', t0: ho, cam: 'people', proc: ['lwPeople'], an: ['people'], key: ['lw'],
       say: r => `Every body radiates in all directions to the cooler surfaces around it. Ring brightness follows the radiant watts per person.`,
       eq: r => eq('Q<sub>rad</sub>', 'n·f<sub>rad</sub>·Q<sub>sens</sub>', `${f0(r.occ)} people · 0,30 · ${f0(r.pplSens / Math.max(1, r.occ))} W`, Wf(r.pplRad)) },
@@ -1109,23 +1118,40 @@ function processSteps() {
       say: r => `Breath and skin add water vapour. It carries latent heat: it does not warm the air, but the system must condense it out.`,
       eq: r => eq('ṁ<sub>w</sub>', 'Q<sub>lat</sub> / h<sub>fg</sub>', `${f0(r.pplLat)} W / 2.454 kJ/kg`, `${f2(r.pplLat / 2454e3 * 3600)} kg/h`) },
     { g: 'Through the envelope', title: 'Conduction through the glass', t0: hs, cam: 'glassIn', proc: ['glassCond'], an: ['temps'], key: ['ink'],
-      say: r => r.gCond > 0 ? `Outdoors at ${f1(r.Tout)} °C is warmer: heat crosses the glazing inwards.` : `Outdoors at ${f1(r.Tout)} °C is colder: heat leaks out through the glazing.`,
-      eq: r => eq('Q<sub>cond</sub>', 'U·A·(T<sub>out</sub> − T<sub>in</sub>) (glazing conduction)', `≈ 1,8·27·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.gCond)) },
+      say: glassSay,
+      eq: glassEq },
+    { g: 'Through the envelope', title: 'Conduction through walls and roof', t0: peakOf(opRoof, false), cam: 'room', proc: ['wallCond'], an: ['temps'], key: ['ink'],
+      say: r => r.incRoof > 50 ? `The sun heats the roof membrane to ${f0(r.TsoRoof)} °C and the walls see ${f1(r.Tout)} °C outdoors. The light insulated roof passes that on within the hour; the concrete walls store it and hand it over hours later.` : `No sun on the roof: its membrane is at ${f1(r.TsoRoof)} °C, so the light roof ${opRoof(r) >= 0 ? 'has little left to give' : 'is losing heat to the sky'}. The concrete walls ${opWalls(r) >= 0 ? 'are still giving back what they stored by day' : 'are taking heat from the room'}.`,
+      eq: r => eq('Q<sub>cd,roof</sub>', 'heat leaving the roof at its inside face', `96 m², outside face ${f1(r.TsoRoof)} °C`, Wf(opRoof(r))) + eq('Q<sub>cd,walls</sub>', 'the same for the four walls', '133 m² of concrete', Wf(opWalls(r))) },
     { g: 'Air exchange', title: 'Ventilation with heat recovery', t0: hl, cam: 'air', proc: ['vent'], an: [], key: ['air'],
       say: r => `Fresh air enters at ${f1(r.Tout)} °C, leaves the heat recovery at ${f1(r.Tmix)} °C, and the system brings it to the room.`,
-      eq: r => eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.hrSens)) + eq('Q<sub>OA</sub>', 'outdoor-air sensible load after recovery', '', Wf(r.oaSens)) },
+      eq: r => eq('Q<sub>OA,0</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>) without recovery', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.oaNoRec)) + eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>) recovered', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.oaRec)) + eq('Q<sub>OA</sub>', 'ṁ·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>in</sub>) after recovery', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tmix)} − ${f1(r.Tair)})`, Wf(r.oaAfter)) },
     { g: 'Air exchange', title: 'Infiltration', t0: hl, cam: 'glassIn', proc: ['infil'], an: [], key: ['air'],
       say: r => `Leaks around the façade let outdoor air in with no recovery.`,
       eq: r => eq('Q<sub>inf</sub>', 'ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>)', `1,2·${f3(r.infFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.infil)) },
     { g: 'Balance', title: 'The air heat balance', t0: hl, cam: 'overview', proc: ['system', 'convSurf', 'convInternal', 'vent'], an: [], key: ['air'],
       say: r => `Only what reaches the air counts now. The system ${r.loadS >= 0 ? 'removes' : 'adds'} exactly the rest to hold ${f1(r.Tair)} °C.`,
-      eq: r => `<div class="eq">${sym('Q')}<sub>surf</sub> + ${sym('Q')}<sub>int</sub> + ${sym('Q')}<sub>inf</sub> + ${sym('Q')}<sub>sys</sub> + ${sym('Q')}<sub>store</sub> ≈ 0 ${tag('ep')}<br><span class="num">&nbsp;&nbsp;${f0(r.surfConv)} + ${f0(r.intConv)} + ${f0(r.oaTransfer)} + ${f0(r.sysConv)} + ${f0(r.airStore)}</span></div>` +
+      eq: r => eq('Q<sub>air</sub>', '≈ Q<sub>cv,surf</sub> + Q<sub>cv,int</sub> + Q<sub>inf</sub> + Q<sub>sys</sub>', `${f0(r.surfConv)} + ${f0(r.intConv)} + ${f0(r.oaTransfer)} + ${f0(r.sysConv)}`, Wf(r.airStore)) +
         eq('Q<sub>load</sub>', 'sensible load on the system', '', kW(r.loadS)) + eq('Q<sub>lat</sub>', 'latent load', '', kW(r.loadL)) },
     { g: 'Balance', title: 'Heat gain is not cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'],
-      say: r => `Radiant gains go into surfaces and mass first and reach the air later, so the load curve is lower and later than the gain curve.`,
-      eq: r => dayChart(x => x.Qtr + x.pplSens + x.litVis + x.litRad + x.litConv + x.eqRad + x.eqConv, x => x.loadS, 'heat gain (sun + internal)', 'sensible load') },
+      say: r => { const g = gainSI(r), e = envI(r), m = massCd(r);
+        return `Sun and internal gains add ${kW(g)} right now; the glazing and infiltration ${e >= 0 ? 'add' : 'take'} ${kW(Math.abs(e))}. ${m < 0 ? `${kW(-m)} goes into the walls, roof and slab instead of the air` : `The walls, roof and slab give back ${kW(m)} stored earlier`}, so the load is ${kW(r.loadS)}, ${r.loadS < g ? 'below' : 'above'} the gain at this moment.` + (season === 'winter' ? ` The air itself floats between 21 and 25 °C here; each time it warms or cools it stores heat too, which makes the load jagged, and on those steps the simulated terms close only roughly.` : ''); },
+      eq: r => eq('Q<sub>s</sub>', '≈ Q<sub>gain</sub> + Q<sub>env</sub> + Q<sub>cd</sub> − Q<sub>air</sub>', `${f0(gainSI(r))} + ${f0(envI(r))} + ${f0(massCd(r))} − ${f0(r.airStore)}`, Wf(r.loadS)) },
   ];
 }
+const gainSI = r => r.Qtr + r.pplSens + r.litVis + r.litRad + r.litConv + r.eqRad + r.eqConv;   // sun through the glass + internal sensible
+const envI = r => r.gCond + r.infil;                                                          // glazing conduction + infiltration, felt at once
+const massCd = r => FACES.reduce((a, k) => a + r.S[k].cond, 0);                              // inside-face conduction of walls, roof and slab; − = stored
+const U_G = 1.7;   // effective glazing U on winter nights, from the simulated conduction (W/m²K)
+const glassEq = r => eq('Q<sub>cd,g,est</sub>', 'U·A·(T<sub>out</sub> − T<sub>in</sub>) textbook estimate', `1,7·27·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(U_G * AG * (r.Tout - r.Tair)))
+  + eq('Q<sub>cd,g</sub>', 'simulated, with the outer pane exchanging radiation with the sky and absorbing sun', '', Wf(r.gCond));
+const glassSay = r => { const est = U_G * AG * (r.Tout - r.Tair), dir = r.gCond > 0 ? 'inwards' : 'outwards';
+  if (Math.sign(est) !== Math.sign(r.gCond) && Math.abs(r.gCond) > 20) return r.gCond < 0
+    ? `Outdoors at ${f1(r.Tout)} °C is warmer than the room, yet heat leaves through the glazing: the outer pane radiates to a sky at ${f1(r.Tsky)} °C and runs colder than the air. The textbook U·A·ΔT misses that.`
+    : `Outdoors at ${f1(r.Tout)} °C is colder, yet heat comes in through the glazing: the panes are warmed by the sun they absorb. The textbook U·A·ΔT misses that.`;
+  const sun = r.Qabs > 100 && Math.abs(r.gCond) > 1.5 * Math.abs(est) ? ` The sun absorbed in the panes (${kW(r.Qabs)}) adds to it, so it is well above the textbook U·A·ΔT.` : '';
+  return `Outdoors at ${f1(r.Tout)} °C is ${r.Tout > r.Tair ? 'warmer' : 'colder'}: heat crosses the glazing ${dir}.${sun}`; };
+const opRoof = r => r.S.Cubierta.cond, opWalls = r => r.S.Muro_N.cond + r.S.Muro_S.cond + r.S.Muro_E.cond + r.S.Muro_W.cond;   // + = into the room
 const peakOf = (f, abs = true) => argmax(r => abs ? Math.abs(f(r)) : f(r));
 // every element, and every process it takes part in, in the order energy flows through it
 function surfaceSequence(k, cam) {
@@ -1147,7 +1173,7 @@ function surfaceSequence(k, cam) {
     eq: r => { const s = r.S[k], dT = s.T - r.Tair; return eq('h<sub>c</sub>', '−Q<sub>conv</sub> / (A·(T<sub>s</sub> − T<sub>air</sub>))', `${f0(-s.conv)} / (${AREA[k]}·${f2(dT)})`, `${Math.abs(dT) > .05 ? f2(-s.conv / (AREA[k] * dT)) : '—'} W/m²K`) + eq('Q<sub>conv</sub>', 'to the air', '', Wf(-s.conv)); } });
   out.push({ title: k === 'Glass' ? 'Conduction through the glazing' : 'Conduction into the construction', t0: k === 'Glass' ? peakOf(r => r.gCond) : peakOf(S_(s => s.cond)), proc: [cond], key: ['ink'], hl: k === 'Glass' ? null : 'cond',
     say: r => k === 'Glass' ? (r.gCond > 0 ? `Outdoors is warmer: heat crosses the glazing inwards.` : `Outdoors is colder: heat leaks out through the glazing.`) : (r.S[k].cond < 0 ? `Heat flows from the face into the ${lo}'s mass.` : `The ${lo}'s mass gives heat back to its face.`),
-    eq: r => k === 'Glass' ? eq('Q<sub>cond</sub>', 'U·A·(T<sub>out</sub> − T<sub>in</sub>)', `≈ 1,8·27·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.gCond)) : eq('Q<sub>cond</sub>', 'inside-face conduction', '', Wf(r.S[k].cond)) });
+    eq: r => k === 'Glass' ? glassEq(r) : eq('Q<sub>cond</sub>', 'inside-face conduction', '', Wf(r.S[k].cond)) });
   if (k === 'Suelo') {
     out.push({ title: 'Storage in the slab', t0: 8, t1: 18, proc: ['floorCond'], key: ['ink'], hl: 'cond', cam: 'cut', an: ['cut'],
       say: r => `The slab warms a fraction of a degree over ${f0(CONC_T)} t of concrete: energy gained by the room that the air has not felt yet.`,
@@ -1202,7 +1228,7 @@ const ELEMENTS = {
   air: () => { const g = 'Outdoor air', hl = SB[season].peak_step / 20;
     return [
       { g, title: 'Ventilation through the heat recovery', t0: hl, cam: 'air', proc: ['vent'], an: [], key: ['air'], say: r => `Fresh air at ${f1(r.Tout)} °C leaves the recovery at ${f1(r.Tmix)} °C.`,
-        eq: r => eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.hrSens)) + eq('Q<sub>OA</sub>', 'after recovery', '', Wf(r.oaSens)) },
+        eq: r => eq('Q<sub>OA,0</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>) without recovery', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.oaNoRec)) + eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>) recovered', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.oaRec)) + eq('Q<sub>OA</sub>', 'ṁ·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>in</sub>) after recovery', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tmix)} − ${f1(r.Tair)})`, Wf(r.oaAfter)) },
       { g, title: 'Infiltration', t0: hl, cam: 'glassIn', proc: ['infil'], an: [], key: ['air'], say: r => `Leaks around the façade, with no recovery.`,
         eq: r => eq('Q<sub>inf</sub>', 'ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>)', `1,2·${f3(r.infFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.infil)) },
     ]; },
@@ -1210,8 +1236,9 @@ const ELEMENTS = {
     return [
       { g, title: 'The air heat balance', t0: hl, cam: 'overview', proc: ['system', 'convSurf', 'convInternal', 'vent'], an: [], key: ['air'], say: r => `The air collects every convective part; the system ${r.loadS >= 0 ? 'removes' : 'adds'} the rest.`,
         eq: r => `<div class="eq">${sym('Q')}<sub>surf</sub> + ${sym('Q')}<sub>int</sub> + ${sym('Q')}<sub>inf</sub> + ${sym('Q')}<sub>sys</sub> + ${sym('Q')}<sub>store</sub> ≈ 0<br><span class="num">&nbsp;&nbsp;${f0(r.surfConv)} + ${f0(r.intConv)} + ${f0(r.oaTransfer)} + ${f0(r.sysConv)} + ${f0(r.airStore)}</span></div>` + eq('Q<sub>load</sub>', 'sensible', '', kW(r.loadS)) + eq('Q<sub>lat</sub>', 'latent', '', kW(r.loadL)) },
-      { g, title: 'Heat gain is not cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'], say: r => `Radiant gains reach the air later, through the surfaces.`,
-        eq: r => dayChart(x => x.Qtr + x.pplSens + x.litVis + x.litRad + x.litConv + x.eqRad + x.eqConv, x => x.loadS, 'heat gain', 'sensible load') },
+      { g, title: 'Heat gain is not cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'], say: r => { const g = gainSI(r), e = envI(r), m = massCd(r);
+        return `Sun and internal gains add ${kW(g)} right now; the glazing and infiltration ${e >= 0 ? 'add' : 'take'} ${kW(Math.abs(e))}. ${m < 0 ? `${kW(-m)} goes into the walls, roof and slab instead of the air` : `The walls, roof and slab give back ${kW(m)} stored earlier`}, so the load is ${kW(r.loadS)}, ${r.loadS < g ? 'below' : 'above'} the gain at this moment.` + (season === 'winter' ? ` The air itself floats between 21 and 25 °C here; each time it warms or cools it stores heat too, which makes the load jagged, and on those steps the simulated terms close only roughly.` : ''); },
+        eq: r => eq('Q<sub>s</sub>', '≈ Q<sub>gain</sub> + Q<sub>env</sub> + Q<sub>cd</sub> − Q<sub>air</sub>', `${f0(gainSI(r))} + ${f0(envI(r))} + ${f0(massCd(r))} − ${f0(r.airStore)}`, Wf(r.loadS)) },
     ]; },
   sky: () => [{ g: 'Sun and sky', title: 'The sun\'s path', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'], say: r => `This day's sun path and the rays it sends through the glazing.`,
     eq: r => eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) + eq('T<sub>out</sub>', 'outdoor dry-bulb temperature', '', `${f1(r.Tout)} °C`) }],
@@ -1232,7 +1259,7 @@ function focusOf(step) {
     if (nm === 'lwNet' && only) {   // the partners of that surface in the exchange take part too
       const q = r.S[only[0]].lw; [...ALL, 'Cubierta'].forEach(k => { if (k !== only[0] && Math.sign(r.S[k].lw) === -Math.sign(q) && Math.abs(r.S[k].lw) > 15) F.add(k); });
     }
-    if (nm === 'wallCond') (only || ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W']).forEach(k => F.add(k));
+    if (nm === 'wallCond') (only || OPAQUE).forEach(k => F.add(k));
     if (['lwPeople', 'vapour'].includes(nm) || (nm === 'convInternal' && (!only || only.includes('people')))) F.add('people');
     if (['lwLights', 'visible'].includes(nm) || (nm === 'convInternal' && (!only || only.includes('lights')))) F.add('lamps');
     if (nm === 'lwEquip' || (nm === 'convInternal' && (!only || only.includes('equip')))) F.add('equip');
@@ -1253,7 +1280,7 @@ const CONCEPTS = [
   { k: 'latent', name: 'Sensible and latent', def: 'Sensible heat changes the air temperature; latent heat is moisture to condense out.',
     titles: ['People release moisture', 'The air heat balance'] },
   { k: 'oa', name: 'Outdoor air and heat recovery', def: 'Air and conduction exchange heat with outdoors; recovery takes part of it back.',
-    titles: ['Conduction through the glass', 'Ventilation with heat recovery', 'Infiltration'] },
+    titles: ['Conduction through the glass', 'Conduction through walls and roof', 'Ventilation with heat recovery', 'Infiltration'] },
   { k: 'load', name: 'Heat gain vs cooling load', def: 'Not every watt that enters the room is load right now.',
     titles: ['Where the floor sends its heat', 'The air heat balance', 'Heat gain is not cooling load'] },
 ];
@@ -1309,8 +1336,8 @@ function secWall(r, k = 'Muro_N') {   // vertical wall: outside left, inside rig
   out += tx(x0 - 6, Y(Tn[0]) + 4, `${f1(Tn[0])} °C`, `text-anchor="end" font-size="10.5" fill="${SC.cond}" font-weight="600"`) + tx(x0 + wpx + 6, Y(Tn[Tn.length - 1]) + 4, `${f1(Tn[Tn.length - 1])} °C`, `font-size="10.5" fill="${SC.cond}" font-weight="600"`);
   const s_ = r.S[k], A = AREA[k], xi = x0 + wpx, rows = [['sun', s_.sol, SC.sun], ['internal rad.', s_.ir, SC.lw], ['long-wave', s_.lw, SC.lw], ['air', s_.conv, SC.conv], ['into the wall', s_.cond, SC.cond]];
   rows.forEach(([n, v, c], j) => { const yy = y0 + 12 + j * 23, into = (n === 'into the wall') ? v < 0 : v > 0;
-    out += n === 'long-wave' || n === 'internal rad.' ? (into ? svgWave(xi + 70, yy, xi + 4, yy, c) : svgWave(xi + 4, yy, xi + 70, yy, c)) : (n === 'into the wall' ? svgArrow(xi + 4, yy, xi - 30, yy, c, 2.4) : (into ? svgArrow(xi + 70, yy, xi + 4, yy, c) : svgArrow(xi + 4, yy, xi + 70, yy, c)));
-    out += tx(xi + 76, yy + 3.5, `${n} ${f0(Math.abs(n === 'into the wall' ? v : v) / A)}`, `font-size="10" fill="${c}"`); });
+    out += n === 'long-wave' || n === 'internal rad.' ? (into ? svgWave(xi + 70, yy, xi + 4, yy, c) : svgWave(xi + 4, yy, xi + 70, yy, c)) : (n === 'into the wall' ? (v < 0 ? svgArrow(xi + 4, yy, xi - 30, yy, c, 2.4) : svgArrow(xi - 30, yy, xi + 4, yy, c, 2.4)) : (into ? svgArrow(xi + 70, yy, xi + 4, yy, c) : svgArrow(xi + 4, yy, xi + 70, yy, c)));
+    out += tx(xi + 76, yy + 3.5, `${n === 'into the wall' ? (v < 0 ? 'into the ' : 'out of the ') + (k === 'Cubierta' ? 'roof' : 'wall') : n} ${f0(Math.abs(v) / A)}`, `font-size="10" fill="${c}"`); });
   out += tx(x0 - 6, y0 - 8, 'outside', 'text-anchor="end" font-size="10" fill="#9a958d"') + tx(xi + 4, y0 - 8, 'room · W/m²', 'font-size="10" fill="#9a958d"');
   return `<svg width="${Wd}" height="${Hd}" style="display:block;font-family:'IBM Plex Sans'">${out}</svg>`;
 }
@@ -1330,15 +1357,15 @@ function secGlass(r) {   // double glazing: outside left, two panes and the cavi
   return `<svg width="${Wd}" height="${Hd}" style="display:block;font-family:'IBM Plex Sans'">${out}</svg>`;
 }
 const SECTION_OF = {
-  'Incident solar on the glazing': 'glass', 'Reflected, absorbed, transmitted': 'glass', 'Conduction through the glass': 'glass',
+  'Incident solar on the glazing': 'glass', 'Reflected, absorbed, transmitted': 'glass', 'Conduction through the glass': 'glass', 'Conduction through walls and roof': 'roof',
   'Direct sun on the floor': 'floor', 'Light becomes heat': 'floor', 'Conduction into the slab': 'floor', 'Storage in the mass': 'floor', 'Release when the sun has gone': 'floor',
   'Where the floor sends its heat': 'floor', 'Heat gain is not cooling load': 'floor',
   'People radiate': 'wall', 'Lights radiate': 'wall', 'Equipment radiates': 'wall', 'Surfaces exchange heat radiation': 'wall', 'Surfaces heat (or cool) the air': 'wall',
 };
 function sectionFor(st, r) {
   const k = SECTION_OF[st.title]; if (!k) return '';
-  const svg = k === 'glass' ? secGlass(r) : k === 'floor' ? secFloor(r) : secWall(r, 'Muro_N');
-  const name = k === 'glass' ? 'Section · double glazing' : k === 'floor' ? 'Section · floor slab' : 'Section · north wall';
+  const svg = k === 'glass' ? secGlass(r) : k === 'floor' ? secFloor(r) : k === 'roof' ? secWall(r, 'Cubierta') : secWall(r, 'Muro_N');
+  const name = k === 'glass' ? 'Section · double glazing' : k === 'floor' ? 'Section · floor slab' : k === 'roof' ? 'Section · roof, outside left' : 'Section · north wall';
   return `<div class="sect">${name}</div><div class="chart">${svg}</div>`;
 }
 
@@ -1429,7 +1456,7 @@ function renderBalance(r) {
   const day = balMode === 'day', dtH = SB[season].step_min / 60, val = f => day ? dayKWh(f) : f(r), fmt = v => day ? `${f1(v)} kWh` : `${f2(v / 1000)} kW`;
   const fmtE = v => day ? '' : `<span style="color:var(--muted);font-weight:400"> · ${f0(v * dtH)} Wh</span>`;
   const vals = BAL_ROWS.map(([n, f, c]) => [n, day ? dayKWh(f, n) : f(r), c, f]);
-  const gainS = vals.reduce((a, x) => a + x[1], 0), latG = val(x => x.pplLat), loadS = val(x => x.loadS), loadL = val(x => x.loadL), oaS = val(x => x.oaSens), oaL = val(x => x.oaLat);
+  const gainS = vals.reduce((a, x) => a + x[1], 0), latG = val(x => x.pplLat), loadS = val(x => x.loadS), loadL = val(x => x.loadL), oaS = val(x => x.oaAfter), oaS0 = val(x => x.oaNoRec), oaL = val(x => x.oaLat);
   const mx = Math.max(...vals.map(x => Math.abs(x[1])), Math.abs(loadS), 1);
   const bar = (v, c) => { const w = Math.abs(v) / mx * 50; return `<span class="b"><i style="${v >= 0 ? `left:50%` : `right:50%`};width:${w}%;background:${c}"></i></span>`; };
   const line = (n, v, c) => `<div class="row" ${tipA(n)}><span class="n">${n}</span>${bar(v, c)}<span class="v">${fmt(v)}</span></div>`;
@@ -1440,7 +1467,7 @@ function renderBalance(r) {
     `<div class="tot">${k('Room sensible load (sum)')}<span class="x big">${fmt(gainS)}</span>
       ${k('simulated zone load')}<span class="x">${fmt(loadS)}${fmtE(loadS)}</span></div>` +
     `<div class="grp"><span>Moisture</span></div>` + line('People, latent', latG, '#0f9fb0') +
-    `<div class="grp"><span>System</span></div>` + line('Room, sensible', loadS, '#2f6fc0') + line('Outdoor air after recovery', oaS, '#6f8fb0') +
+    `<div class="grp"><span>System</span></div>` + line('Room, sensible', loadS, '#2f6fc0') + line('Outdoor air after recovery', oaS, '#6f8fb0') + line('Outdoor air without recovery', oaS0, '#a9bfd8') +
     `<div class="tot">${k('System sensible load')}<span class="x big">${fmt(loadS + oaS)}</span>
       <span class="k"></span><span class="x">${fmtE(loadS + oaS).replace(' · ', '')}</span>
       ${k('System latent load (room + outdoor air)')}<span class="x">${fmt(loadL + oaL)}${fmtE(loadL + oaL)}</span></div>`;
@@ -1589,7 +1616,7 @@ const TIPS = {
     g: bal('Solar through the glazing', [LOAD]), z: true },
   'Conduction through the glazing': { t: 'Conduction through the glazing', u: 'W',
     d: `<p>Heat crossing the glazing because the outside and inside differ in temperature, including the sun absorbed in the panes that flows inwards. Glass has almost no mass, so this reaches the room at once.</p>`,
-    f: `Q ≈ U·A<sub>g</sub>·(T<sub>out</sub> − T<sub>in</sub>) + absorbed solar flowing in`,
+    f: `Q ≈ U·A<sub>g</sub>·(T<sub>out</sub> − T<sub>in</sub>) + absorbed solar flowing in − outer pane radiating to the sky`,
     g: bal('Conduction through the glazing'), z: true },
   'Opaque envelope (− = into the mass)': { t: 'Opaque envelope', u: 'W',
     d: `<p>The heat that the walls, floor and roof give to the room at their inside faces, added up. <b>Negative</b> means the opposite: the inside faces are pushing heat into the constructions, which store it. That is how the mass takes the sun and internal radiation away from the air in the afternoon and gives it back at night.</p>`,
@@ -1610,10 +1637,14 @@ const TIPS = {
   'Outdoor air after recovery': { t: 'Outdoor air after recovery', u: 'W',
     d: `<p>The load of bringing the ventilation air from its temperature after the heat recovery to the room's. The recovery has already taken part of it back from the exhaust air.</p>`,
     f: `Q<sub>OA</sub> = ṁ·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>air</sub>) ;  Q<sub>rec</sub> = ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)`,
-    g: [['after recovery', r => r.oaSens, '#6f8fb0'], ['recovered', r => r.hrSens, '#9a958d']], z: true },
+    g: [['without recovery', r => r.oaNoRec, '#a9bfd8'], ['after recovery', r => r.oaAfter, '#6f8fb0'], ['recovered', r => r.oaRec, '#9a958d']], z: true },
+  'Outdoor air without recovery': { t: 'Outdoor air without recovery', u: 'W',
+    d: `<p>The same fresh air brought straight from outdoors to the room's temperature, with no recovery. It is not part of the load here: it shows what the recovery saves.</p>`,
+    f: `Q<sub>OA,0</sub> = ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>air</sub>) = Q<sub>OA</sub> + Q<sub>rec</sub>`,
+    g: [['without recovery', r => r.oaNoRec, '#a9bfd8'], ['after recovery', r => r.oaAfter, '#6f8fb0']], z: true },
   'System sensible load': { t: 'System sensible load', u: 'W',
     d: `<p>What the coil must deliver: the room sensible load plus the outdoor air after recovery. This is the figure that sizes the equipment.</p>`,
-    g: [['system', r => r.loadS + r.oaSens, '#1b1b1b'], LOAD], z: true },
+    g: [['system', r => r.loadS + r.oaAfter, '#1b1b1b'], LOAD], z: true },
   'System latent load (room + outdoor air)': { t: 'System latent load', u: 'W',
     d: `<p>The moisture the system must remove, as heat: from the people in the room and from the outdoor air after the recovery.</p>`,
     g: [['system latent', r => r.loadL + r.oaLat, '#0f9fb0']], z: true },
@@ -1775,7 +1806,25 @@ function frame(now) {
 }
 go(0);
 // self-check: every step of every mode, both seasons, every 30 min: no NaN/undefined in the card text, no throw
+// self-check of the worked numbers: evaluate every substituted line and compare it with the result printed next to it
+const NUM_OK = /^[\d.,·()\s−+\-\/⁴²×⁻⁸]+$/;
+function evalNum(t) {
+  if (!NUM_OK.test(t)) return null;
+  const js = t.replace(/10⁻⁸/g, '1e-8').replace(/(\d)\.(\d{3})(?!\d)/g, '$1$2').replace(/,/g, '.').replace(/·|×/g, '*').replace(/−/g, '-').replace(/⁴/g, '**4').replace(/²/g, '**2');
+  try { const v = Function(`return (${js})`)(); return Number.isFinite(v) ? v : null; } catch (e) { return null; }
+}
+function resVal(t) {
+  const m = t.replace(/<[^>]+>/g, '').trim().match(/^([−+-]?[\d.]*\d(?:,\d+)?)\s*(kW|W|°C|kg\/h|K|%)?/); if (!m) return null;
+  const v = +m[1].replace(/−/, '-').replace(/\.(?=\d{3})/g, '').replace(',', '.'); return m[2] === 'kW' ? v * 1000 : v;
+}
+function checkArith(html, where, out) {
+  for (const chunk of String(html).split('<div class="eq">')) if (!/≈/.test(chunk)) for (const m of chunk.matchAll(/<span class="res">(.*?)<\/span>(?:<span class="sub">= (.*?)<\/span>)/g)) {   // '≈' relations are checked apart
+    const num = evalNum(m[2].replace(/<[^>]+>/g, '').trim()), res = resVal(m[1]); if (num == null || res == null) continue;
+    if (Math.abs(num - res) > Math.max(.05 * Math.abs(res), 2, /kW/.test(m[1]) ? 60 : 0)) out.push(`${where}: ${m[2].replace(/<[^>]+>/g, '')} = ${num.toFixed(1)} but shows ${m[1].replace(/<[^>]+>/g, '')}`);
+  }
+}
 function audit() {
+  const arith = [];
   const keep = { season, sortMode, elementPick, conceptPick, S_r: S.r }, bad = [], strip = h => String(h).replace(/<[^>]+>/g, '');
   let n = 0;
   for (const se of ['summer', 'winter']) {
@@ -1788,6 +1837,7 @@ function audit() {
           const r = row(i); S.r = r; S.sv = sunVec(r); S.up = r.alt > 0 && -S.sv.z > .02; n++;
           try {
             const txt = strip(st.say(r)) + strip(st.eq(r)) + (i === 0 ? strip(chart24(st)) : '') + (m === 'concept' ? strip(sectionFor(st, r)) : '');
+            if (i % 30 === 0) checkArith(st.eq(r), `${se} ${m}${pick ? ':' + pick : ''} ${st.title} @${stepLabel(i)}`, arith);
             if (/NaN|undefined|Infinity/.test(txt)) bad.push(`${se} ${m}${pick ? ':' + pick : ''} #${si} ${st.title} @${stepLabel(i)}: ${(txt.match(/.{0,30}(NaN|undefined|Infinity)/) || [''])[0]}`);
             if (i % 40 === 0) {   // draw the glyphs too, and look for non-finite vertices
               LIT = litCells(); for (const L of LAYERS) L.begin(); DIFF.surf.clear();
@@ -1803,7 +1853,7 @@ function audit() {
   }
   for (const L of LAYERS) L.begin(); LABS = []; season = keep.season; sortMode = keep.sortMode; elementPick = keep.elementPick; conceptPick = keep.conceptPick; S.r = keep.S_r;
   steps = makeSteps(); go(Math.min(cur, steps.length - 1)); chartKey = '';
-  return { checked: n, problems: [...new Set(bad)] };
+  return { checked: n, problems: [...new Set(bad)], arith: [...new Set(arith)] };
 }
 window.__dbg = { go, row: i => row(i), steps: () => steps, camera, controls, audit, renderConditions };
 requestAnimationFrame(frame);

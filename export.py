@@ -81,7 +81,7 @@ def season(dataset, peak_var):
            "peak_step": peak - d0, "zone": {}, "site": {}, "surf": {}, "win": {}, "nodes": {}}
     vars_ = m["datasets"][dataset]["variables"]
     for k, v in ZONE.items():
-        out["zone"][k] = r(b.load(dataset, v)[sl, 0]) if v in vars_ else None
+        out["zone"][k] = r(b.load(dataset, v)[sl, 0], 5 if k.endswith("Flow") else 2) if v in vars_ else None   # flows in m³/s need the decimals
     for k, v in SITE.items():
         out["site"][k] = r(b.load(dataset, v)[sl, 0], 5 if k == "wOut" else 2)
     out["zone"]["wIn"] = r(b.load(dataset, ZONE["wIn"])[sl, 0], 5)
