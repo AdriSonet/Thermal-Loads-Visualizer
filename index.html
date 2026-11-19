@@ -118,6 +118,27 @@
   .rsec + .rsec { border-top: 1px solid var(--line-2); }
   .rsec.grow { flex: 1; overflow: auto; }
   .rscroll { flex: 1; overflow: auto; }
+  [data-tip] { cursor: help; }
+  [data-tip]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 6px; }
+  .cst[data-tip]:hover { background: #e9e5de; }
+  #bal .row[data-tip]:hover .n, .gtot [data-tip]:hover, #bal .tot [data-tip]:hover, .parts [data-tip]:hover { color: var(--ink); }
+  .cst .l, #bal .row .n, #bal .tot .k, .gtot .k, .gsrc .sh .n, .parts .lb { text-decoration: underline dotted #cdc8bf; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  #bal .tot .k:empty { text-decoration: none; }
+  #tip { position: fixed; z-index: 20; width: 316px; background: #fff; border-radius: var(--r-panel); box-shadow: 0 12px 32px rgba(40,32,20,.16), 0 1px 3px rgba(40,32,20,.08);
+    padding: 13px 15px 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); pointer-events: none; opacity: 0; transform: translateX(6px); transition: opacity .12s, transform .12s; }
+  #tip.on { opacity: 1; transform: none; }
+  #tip .tt { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  #tip p { margin: 0 0 6px; }
+  #tip p b { color: var(--ink); font-weight: 600; }
+  #tip .tf { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; background: var(--chip); border-radius: 6px; padding: 6px 8px; margin: 6px 0; color: var(--ink); line-height: 1.6; }
+  #tip .tf .g { display: block; font-family: "IBM Plex Sans"; font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+  #tip sub { font-size: 70%; }
+  #tip .sp { margin-top: 8px; border-top: 1px solid var(--line-2); padding-top: 8px; }
+  #tip .sp svg text { fill: #9a958d; }
+  #tip .sl { display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  #tip .sl b { text-align: right; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tip .sl i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+  #tip .est { font-size: 10.5px; color: #7a5b00; background: #fbf0d0; border-radius: 4px; padding: 0 5px; margin-left: 4px; }
   .rtabs { padding: 12px 16px 0; border-top: 1px solid var(--line-2); }
   .rtabs .seg { margin: 0; }
   .rscroll .rsec { padding-top: 12px; }
@@ -362,6 +383,7 @@ function row(i) {
     Tsky: g(si.Tsky), Top: g(z.Top), RH: g(z.RH), loadS: g(z.zSensCool) - g(z.zSensHeat), loadL: g(z.zLatCool) - g(z.zLatHeat),
     surfConv: g(z.surfConv), intConv: g(z.intConv), oaTransfer: g(z.oaTransfer), sysConv: g(z.sysConv), airStore: g(z.airStore), S: {} };
   r.Qinc = r.Iinc * AG; r.Qref = Math.max(0, r.Qinc - r.Qtr - r.Qabs);
+  r.incRoof = sf.incOut.Cubierta[i]; r.TsoRoof = sf.Tout.Cubierta[i];   // irradiance on the roof and its simulated outside-face temperature
   for (const f of FACES) r.S[f] = { T: sf.Tin[f][i], sol: sf.solIn[f][i], ir: sf.intRad[f][i], lw: sf.lw[f][i], conv: sf.conv[f][i], cond: sf.cond[f][i] };
   r.S.Glass = { T: r.TgIn, sol: 0, ir: 0, lw: g(w.lw), conv: g(w.conv), cond: 0 };
   // CondFD nodes of the floor slab: x from the ground side; storage Σ ρ·c·Δx·dT/dt
@@ -1402,6 +1424,7 @@ const BAL_ROWS = [
 ];
 const dayCache = {};
 function dayKWh(f, name = String(f)) { const k = season + '|' + name; return dayCache[k] ??= (() => { let s_ = 0; for (let i = 0; i < 480; i++) s_ += f(row(i)); return s_ * SB[season].step_min / 60 / 1000; })(); }
+const tipA = k => `data-tip="${k}" tabindex="0"`;
 function renderBalance(r) {
   const day = balMode === 'day', dtH = SB[season].step_min / 60, val = f => day ? dayKWh(f) : f(r), fmt = v => day ? `${f1(v)} kWh` : `${f2(v / 1000)} kW`;
   const fmtE = v => day ? '' : `<span style="color:var(--muted);font-weight:400"> · ${f0(v * dtH)} Wh</span>`;
@@ -1409,29 +1432,33 @@ function renderBalance(r) {
   const gainS = vals.reduce((a, x) => a + x[1], 0), latG = val(x => x.pplLat), loadS = val(x => x.loadS), loadL = val(x => x.loadL), oaS = val(x => x.oaSens), oaL = val(x => x.oaLat);
   const mx = Math.max(...vals.map(x => Math.abs(x[1])), Math.abs(loadS), 1);
   const bar = (v, c) => { const w = Math.abs(v) / mx * 50; return `<span class="b"><i style="${v >= 0 ? `left:50%` : `right:50%`};width:${w}%;background:${c}"></i></span>`; };
-  const line = (n, v, c) => `<div class="row"><span class="n">${n}</span>${bar(v, c)}<span class="v">${fmt(v)}</span></div>`;
+  const line = (n, v, c) => `<div class="row" ${tipA(n)}><span class="n">${n}</span>${bar(v, c)}<span class="v">${fmt(v)}</span></div>`;
+  const k = n => `<span class="k" ${tipA(n)}>${n}</span>`;
   $('balBody').innerHTML =
     `<p class="bnote">${day ? `Day total: sum of the ${480} time steps, rate × ${SB[season].step_min} min each.` : `Time step ${stepLabel(r.i)}: average rates over the interval; energy = rate × ${SB[season].step_min} min.`}</p>` +
     `<div class="grp"><span>Heat entering the room · sensible</span></div>` + vals.map(([n, v, c]) => line(n, v, c)).join('') +
-    `<div class="tot"><span class="k">Room sensible load (sum)</span><span class="x big">${fmt(gainS)}</span>
-      <span class="k">simulated zone load</span><span class="x">${fmt(loadS)}${fmtE(loadS)}</span></div>` +
+    `<div class="tot">${k('Room sensible load (sum)')}<span class="x big">${fmt(gainS)}</span>
+      ${k('simulated zone load')}<span class="x">${fmt(loadS)}${fmtE(loadS)}</span></div>` +
     `<div class="grp"><span>Moisture</span></div>` + line('People, latent', latG, '#0f9fb0') +
     `<div class="grp"><span>System</span></div>` + line('Room, sensible', loadS, '#2f6fc0') + line('Outdoor air after recovery', oaS, '#6f8fb0') +
-    `<div class="tot"><span class="k">System sensible load</span><span class="x big">${fmt(loadS + oaS)}</span>
+    `<div class="tot">${k('System sensible load')}<span class="x big">${fmt(loadS + oaS)}</span>
       <span class="k"></span><span class="x">${fmtE(loadS + oaS).replace(' · ', '')}</span>
-      <span class="k">System latent load (room + outdoor air)</span><span class="x">${fmt(loadL + oaL)}${fmtE(loadL + oaL)}</span></div>`;
+      ${k('System latent load (room + outdoor air)')}<span class="x">${fmt(loadL + oaL)}${fmtE(loadL + oaL)}</span></div>`;
 }
 // exterior and interior conditions at this time step: weather, room air, occupancy and every internal gain split by how it leaves its source
 const FLOOR_A = 96, ROOM_V = W * D * H, P_SITE = 101325 * Math.pow(1 - 2.25577e-5 * 263, 5.25588);   // Zaragoza, 263 m
 const psat = T => 610.94 * Math.exp(17.625 * T / (T + 243.04));                                        // Pa (Magnus)
 const rhOf = (T, w) => clamp(w * P_SITE / (.621945 + w) / psat(T), 0, 1.2);
+// sol-air temperature of the roof (estimated): outdoor air + absorbed sun − long-wave loss to the sky, over the outside film coefficient
+const ROOF_OUT = SB.materials[SB.constructions[SB.face_construction.Cubierta].layers[0].material], H_O = 17;
+const solAirRoof = r => r.Tout + ROOF_OUT.solar_absorptance * r.incRoof / H_O - ROOF_OUT.thermal_absorptance * SIGMA * ((r.Tout + 273.15) ** 4 - (r.Tsky + 273.15) ** 4) / H_O;
 const GC = { rad: ['radiant', '#7b2fd0'], conv: ['convective', '#ef7d00'], vis: ['visible', '#d99a00'], lat: ['latent', '#0f9fb0'], ret: ['to return air', '#9a958d'] };
-const cst = (l, v, title = '') => `<div class="cst"${title ? ` title="${title}"` : ''}><div class="l">${l}</div><div class="v">${v}</div></div>`;
-function gainBlock(name, meta, parts) {
+const cst = (key, l, v) => `<div class="cst" ${tipA(key)}><div class="l">${l}</div><div class="v">${v}</div></div>`;
+function gainBlock(key, name, meta, parts) {
   const tot = parts.reduce((a, [, v]) => a + Math.max(0, v), 0), vis = parts.filter(([, v]) => v > .5);
-  return `<div class="gsrc"><div class="sh"><span class="n">${name}</span><span class="m">${meta}</span><span class="v">${tot >= 1000 ? kW(tot) : Wf(tot)}</span></div>
+  return `<div class="gsrc"><div class="sh"><span class="n" ${tipA(key)}>${name}</span><span class="m">${meta}</span><span class="v">${tot >= 1000 ? kW(tot) : Wf(tot)}</span></div>
     <div class="stack">${tot > .5 ? vis.map(([k, v]) => `<i style="width:${(v / tot * 100).toFixed(2)}%;background:${GC[k][1]}"></i>`).join('') : ''}</div>
-    <div class="parts">${tot > .5 ? vis.map(([k, v]) => `<span class="d" style="background:${GC[k][1]}"></span><span>${GC[k][0]}</span><span class="p">${f0(v / tot * 100)} %</span><span class="w">${Wf(v)}</span>`).join('') : '<span></span><span style="color:var(--muted)">off at this time step</span>'}</div></div>`;
+    <div class="parts">${tot > .5 ? vis.map(([k, v]) => `<span class="d" style="background:${GC[k][1]}"></span><span class="lb" ${tipA('p_' + k)}>${GC[k][0]}</span><span class="p">${f0(v / tot * 100)} %</span><span class="w">${Wf(v)}</span>`).join('') : '<span></span><span style="color:var(--muted)">off at this time step</span>'}</div></div>`;
 }
 function renderConditions(r) {
   $('condWhen').textContent = stepLabel(r.i);
@@ -1439,35 +1466,198 @@ function renderConditions(r) {
   const lit = r.litVis + r.litRad + r.litConv + r.litRet, eqp = r.eqRad + r.eqConv;
   const sens = r.pplSens + lit + eqp, rad = r.pplRad + r.litRad + r.litVis + r.eqRad;
   const rhOut = rhOf(r.Tout, r.wOut), gk = w => f1(w * 1000);
+  const k = (key, t) => `<span class="k" ${tipA(key)}>${t}</span>`;
   $('condBody').innerHTML =
     `<div class="cgrp">Outdoors</div><div class="cgrid">` +
-      cst('Dry-bulb temperature', `${f1(r.Tout)} °C`) +
-      cst('Humidity', `${gk(r.wOut)} g/kg <small>· ${f0(rhOut * 100)} %</small>`, 'Relative humidity derived from the humidity ratio at the site pressure') +
-      cst('Sky temperature', `${f1(r.Tsky)} °C`) +
-      cst('Sun', r.alt > 0 ? `${f0(r.alt)}° <small>alt</small> · ${f0(r.az)}° <small>az</small>` : `<small>below the horizon</small>`) +
-      cst('Direct normal', `${f0(r.DNI)} <small>W/m²</small>`) +
-      cst('Diffuse horizontal', `${f0(r.DHI)} <small>W/m²</small>`) +
+      cst('tout', 'Dry-bulb temperature', `${f1(r.Tout)} °C`) +
+      cst('humOut', 'Humidity', `${gk(r.wOut)} g/kg <small>· ${f0(rhOut * 100)} %</small>`) +
+      cst('tsky', 'Sky temperature', `${f1(r.Tsky)} °C`) +
+      cst('solair', 'Sol-air temperature, roof', `${f1(solAirRoof(r))} °C <small>est.</small>`) +
+      cst('sun', 'Sun', r.alt > 0 ? `${f0(r.alt)}° <small>alt</small> · ${f0(r.az)}° <small>az</small>` : `<small>below the horizon</small>`) +
+      cst('dni', 'Direct normal', `${f0(r.DNI)} <small>W/m²</small>`) +
+      cst('dhi', 'Diffuse horizontal', `${f0(r.DHI)} <small>W/m²</small>`) +
     `</div><div class="cgrp">Indoors</div><div class="cgrid">` +
-      cst('Air temperature', `${f1(r.Tair)} °C`) +
-      cst('Mean radiant', `${f1(r.MRT)} °C`) +
-      cst('Operative', `${f1(r.Top)} °C`) +
-      cst('Humidity', `${gk(r.wIn)} g/kg <small>· ${f0(r.RH)} %</small>`) +
-      cst('Outdoor air', `${f0(r.oaFlow * 1000)} <small>L/s${n > .05 ? ` · ${f1(r.oaFlow * 1000 / n)}/person` : ''}</small>`) +
-      cst('Infiltration', `${f2(r.infFlow * 3600 / ROOM_V)} <small>air changes/h</small>`) +
+      cst('tair', 'Air temperature', `${f1(r.Tair)} °C`) +
+      cst('mrt', 'Mean radiant', `${f1(r.MRT)} °C`) +
+      cst('top', 'Operative', `${f1(r.Top)} °C`) +
+      cst('humIn', 'Humidity', `${gk(r.wIn)} g/kg <small>· ${f0(r.RH)} %</small>`) +
+      cst('oa', 'Outdoor air', `${f0(r.oaFlow * 1000)} <small>L/s${n > .05 ? ` · ${f1(r.oaFlow * 1000 / n)}/person` : ''}</small>`) +
+      cst('infil', 'Infiltration', `${f2(r.infFlow * 3600 / ROOM_V)} <small>air changes/h</small>`) +
     `</div><div class="cgrp">Internal gains · ${FLOOR_A} m² floor</div>` +
-      gainBlock('People', n > .05 ? `${f0(n)} · ${f1(FLOOR_A / n)} m²/person · ${f0(perS)} + ${f0(perL)} W each` : 'nobody in the room',
+      gainBlock('people', 'People', n > .05 ? `${f0(n)} · ${f1(FLOOR_A / n)} m²/person · ${f0(perS)} + ${f0(perL)} W each` : 'nobody in the room',
         [['rad', r.pplRad], ['conv', r.pplConv], ['lat', r.pplLat]]) +
-      gainBlock('Lights', `${f1(lit / FLOOR_A)} W/m²`, [['vis', r.litVis], ['rad', r.litRad], ['conv', r.litConv], ['ret', r.litRet]]) +
-      gainBlock('Equipment', `${f1(eqp / FLOOR_A)} W/m²`, [['rad', r.eqRad], ['conv', r.eqConv]]) +
-    `<div class="gtot"><span class="k">Sensible internal gains</span><span class="x">${kW(sens)}</span>
-      <span class="k">Latent internal gains</span><span class="x">${kW(r.pplLat)}</span>
-      <span class="k">Radiant share of the sensible (incl. visible)</span><span class="x">${sens > 1 ? f0(rad / sens * 100) + ' %' : '—'}</span>
-      <span class="k">Sensible heat ratio, people</span><span class="x">${r.pplSens + r.pplLat > 1 ? f2(r.pplSens / (r.pplSens + r.pplLat)) : '—'}</span></div>`;
+      gainBlock('lights', 'Lights', `${f1(lit / FLOOR_A)} W/m²`, [['vis', r.litVis], ['rad', r.litRad], ['conv', r.litConv], ['ret', r.litRet]]) +
+      gainBlock('equip', 'Equipment', `${f1(eqp / FLOOR_A)} W/m²`, [['rad', r.eqRad], ['conv', r.eqConv]]) +
+    `<div class="gtot">${k('sensInt', 'Sensible internal gains')}<span class="x">${kW(sens)}</span>
+      ${k('latInt', 'Latent internal gains')}<span class="x">${kW(r.pplLat)}</span>
+      ${k('radShare', 'Radiant share of the sensible (incl. visible)')}<span class="x">${sens > 1 ? f0(rad / sens * 100) + ' %' : '—'}</span>
+      ${k('shr', 'Sensible heat ratio, people')}<span class="x">${r.pplSens + r.pplLat > 1 ? f2(r.pplSens / (r.pplSens + r.pplLat)) : '—'}</span></div>`;
 }
+
+// ================================================================ tooltips: what each quantity is, its formula and its 24 h curve
+const BALF = Object.fromEntries(BAL_ROWS.map(([n, f, c]) => [n, [f, c]]));
+const bal = (n, extra = []) => [[n.replace(/ \(.*\)$/, ''), BALF[n][0], BALF[n][1]], ...extra];
+const LOAD = ['sensible load', r => r.loadS, '#2f6fc0'];
+const g = (...items) => `<span class="g">${items.join(' · ')}</span>`;
+const TIPS = {
+  // ---- outdoors
+  tout: { t: 'Outdoor dry-bulb temperature', u: '°C',
+    d: `<p>Air temperature measured in the shade, from the weather file. It drives conduction through the envelope and the load of the outdoor air brought in for ventilation.</p>`,
+    g: [['outdoor air', r => r.Tout, '#e3170a'], ['room air', r => r.Tair, '#2f6fc0']] },
+  humOut: { t: 'Outdoor humidity', u: 'g/kg',
+    d: `<p><b>Humidity ratio</b> <i>w</i>: grams of water vapour per kilogram of dry air. It stays constant when air warms or cools without condensing, so it is what ventilation actually carries in.</p>
+      <p><b>Relative humidity</b> <i>φ</i>: how close the air is to saturation at its own temperature. It is derived here from <i>w</i> at the site pressure (≈ 98 kPa at 263 m).</p>`,
+    f: `φ = p<sub>w</sub> / p<sub>sat</sub>(T) ;  p<sub>w</sub> = w·p / (0,622 + w)${g('p<sub>w</sub> vapour pressure', 'p<sub>sat</sub> saturation pressure', 'p site pressure')}`,
+    g: [['outdoors', r => r.wOut * 1000, '#0f9fb0'], ['room', r => r.wIn * 1000, '#2f6fc0']] },
+  tsky: { t: 'Sky temperature', u: '°C',
+    d: `<p>The effective temperature of the sky dome for <b>long-wave</b> radiation: the temperature of a black body that would radiate to a horizontal surface as much heat as the real sky does. A clear, dry sky is much colder than the air, so roofs and façades lose heat by radiating to it, day and night. Clouds and humidity bring it closer to the air temperature.</p>
+      <p><b>It is not the sol-air temperature.</b> Sky temperature describes the sky and is the same for every surface. Sol-air temperature describes one surface: it adds the sun that surface absorbs and subtracts its long-wave loss to this sky.</p>`,
+    f: `T<sub>sky</sub> = (L<sub>sky</sub> / σ)<sup>¼</sup>${g('L<sub>sky</sub> long-wave irradiance from the sky on a horizontal plane, W/m²', 'σ Stefan–Boltzmann constant')}`,
+    g: [['outdoor air', r => r.Tout, '#e3170a'], ['sky', r => r.Tsky, '#4b6ba9']] },
+  solair: { t: 'Sol-air temperature, roof', est: true, u: '°C',
+    d: `<p>A fictitious outdoor air temperature that would give the roof's outside face the same heat flow as the real mix of air temperature, absorbed sun and long-wave loss to the sky. It belongs to one surface: its tilt, orientation and colour. A dark roof facing the summer sun can be 25–35 K above the air.</p>
+      <p>Estimated with an outside film coefficient <i>h</i><sub>o</sub> = 17 W/m²K. It lands close to the roof's simulated outside-face temperature, plotted alongside.</p>`,
+    f: `T<sub>sa</sub> = T<sub>out</sub> + α·I / h<sub>o</sub> − ε·σ·(T<sub>out</sub>⁴ − T<sub>sky</sub>⁴) / h<sub>o</sub>${g(`α solar absorptance of the membrane, ${f2(ROOF_OUT.solar_absorptance)}`, 'I solar irradiance on the roof, W/m²', `ε long-wave emissivity, ${f2(ROOF_OUT.thermal_absorptance)}`, 'h<sub>o</sub> outside film coefficient, W/m²K', 'temperatures in K inside the fourth powers')}`,
+    g: [['outdoor air', r => r.Tout, '#e3170a'], ['sky', r => r.Tsky, '#4b6ba9'], ['sol-air, roof (est.)', solAirRoof, '#ef9c15'], ['roof outside face (simulated)', r => r.TsoRoof, '#1b1b1b']] },
+  sun: { t: 'Sun position', u: '°',
+    d: `<p><b>Altitude</b> <i>β</i>: angle of the sun above the horizon. <b>Azimuth</b> <i>φ</i>: direction of the sun measured clockwise from north (90° east, 180° south, 270° west). Together they set the angle of incidence on every surface and where the beam lands in the room.</p>`,
+    f: `cos θ = cos β · cos(φ − φ<sub>n</sub>) · sin Σ + sin β · cos Σ${g('θ angle of incidence on a surface', 'φ<sub>n</sub> azimuth of the surface normal', 'Σ surface tilt (90° for a wall)')}`,
+    g: [['altitude', r => r.alt, '#d99a00']], z: true },
+  dni: { t: 'Direct normal irradiance', u: 'W/m²',
+    d: `<p><b>Direct</b>: only the beam from the solar disc, without the light scattered by the sky. <b>Normal</b>: measured on a plane held perpendicular to that beam, so it is the most the beam can deliver per square metre. A surface at incidence angle <i>θ</i> receives <i>I</i><sub>b</sub>·cos <i>θ</i>.</p>`,
+    g: [['direct normal', r => r.DNI, '#d99a00'], ['incident on the glazing', r => r.Iinc, '#8a8a8a']], z: true },
+  dhi: { t: 'Diffuse horizontal irradiance', u: 'W/m²',
+    d: `<p>Sunlight scattered by the atmosphere and clouds, arriving from the whole sky dome on a horizontal surface. It has no single direction, so it reaches façades that never see the sun, and it is what remains on cloudy days.</p>`,
+    f: `I<sub>glob,h</sub> = I<sub>b</sub>·sin β + I<sub>d,h</sub>${g('I<sub>glob,h</sub> global horizontal irradiance', 'I<sub>d,h</sub> diffuse horizontal irradiance')}`,
+    g: [['diffuse horizontal', r => r.DHI, '#8a8a8a'], ['direct normal', r => r.DNI, '#d99a00']], z: true },
+  // ---- indoors
+  tair: { t: 'Room air temperature', u: '°C',
+    d: `<p>The temperature of the room air, taken as well mixed. It is the quantity the system controls: the load is exactly the heat it must remove or add to hold it at the setpoint.</p>`,
+    g: [['room air', r => r.Tair, '#2f6fc0'], ['outdoor air', r => r.Tout, '#e3170a']] },
+  mrt: { t: 'Mean radiant temperature', u: '°C',
+    d: `<p>The uniform surrounding temperature that would exchange the same radiation with a person as the real surfaces do. Hot glazing or a sunlit floor raise it; a cold window lowers it. Comfort depends on it as much as on the air.</p>`,
+    f: `T<sub>mrt</sub> ≈ Σ A<sub>i</sub>·ε<sub>i</sub>·T<sub>i</sub> / Σ A<sub>i</sub>·ε<sub>i</sub>${g('A<sub>i</sub> area', 'ε<sub>i</sub> emissivity', 'T<sub>i</sub> inside-face temperature of each surface')}`,
+    g: [['mean radiant', r => r.MRT, '#7b2fd0'], ['room air', r => r.Tair, '#2f6fc0']] },
+  top: { t: 'Operative temperature', u: '°C',
+    d: `<p>What a person feels: a blend of the air temperature and the mean radiant temperature, weighted by how the body exchanges heat by convection and by radiation. In still air it is close to their average. Comfort standards set their ranges on it.</p>`,
+    f: `T<sub>op</sub> = (h<sub>c</sub>·T<sub>air</sub> + h<sub>r</sub>·T<sub>mrt</sub>) / (h<sub>c</sub> + h<sub>r</sub>) ≈ (T<sub>air</sub> + T<sub>mrt</sub>) / 2${g('h<sub>c</sub> convective coefficient of the body', 'h<sub>r</sub> radiative coefficient of the body')}`,
+    g: [['operative', r => r.Top, '#1b1b1b'], ['room air', r => r.Tair, '#2f6fc0'], ['mean radiant', r => r.MRT, '#7b2fd0']] },
+  humIn: { t: 'Indoor humidity', u: 'g/kg',
+    d: `<p>Water vapour in the room air, as humidity ratio and relative humidity. People add moisture; ventilation and infiltration exchange it with outdoors; the system removes it by drying the supply air. The latent load is the heat needed to take it out.</p>`,
+    g: [['room', r => r.wIn * 1000, '#2f6fc0'], ['outdoors', r => r.wOut * 1000, '#0f9fb0']] },
+  oa: { t: 'Outdoor air (ventilation)', u: 'L/s',
+    d: `<p>Fresh air supplied mechanically for air quality, sized per person and per m². It passes through the heat recovery first. Its load is handled by the system, not by the room: it appears under System in the balance.</p>`,
+    f: `Q<sub>OA</sub> = ρ·V̇·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>air</sub>)${g('V̇ outdoor-air flow, m³/s', 'T<sub>mix</sub> air leaving the heat recovery', 'ρ·c<sub>p</sub> ≈ 1,2 kJ/m³K')}`,
+    g: [['outdoor air', r => r.oaFlow * 1000, '#6f8fb0']], z: true },
+  infil: { t: 'Infiltration', u: 'ACH',
+    d: `<p>Outdoor air leaking in through the façade, uncontrolled and without heat recovery, expressed in air changes per hour of the room volume (${f0(ROOM_V)} m³). Unlike ventilation, its heat acts directly on the room air.</p>`,
+    f: `ACH = V̇·3600 / V ;  Q<sub>inf</sub> = ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>air</sub>)`,
+    g: [['air changes per hour', r => r.infFlow * 3600 / ROOM_V, '#6f8fb0']], z: true },
+  // ---- internal gains
+  people: { t: 'People', u: 'W',
+    d: `<p>Each occupant gives off heat according to activity: <b>sensible</b> heat that warms things, split into a radiant part (to the surfaces) and a convective part (straight to the air), and <b>latent</b> heat carried by the vapour from breath and sweat. Occupancy follows the schedule of the space.</p>`,
+    f: `Q<sub>sens</sub> = n·q<sub>s</sub> ;  Q<sub>rad</sub> = f<sub>rad</sub>·Q<sub>sens</sub> ;  Q<sub>lat</sub> = n·q<sub>l</sub>${g('n occupants', 'q<sub>s</sub>, q<sub>l</sub> sensible and latent heat per person', 'f<sub>rad</sub> radiant fraction')}`,
+    g: [['radiant', r => r.pplRad, '#7b2fd0'], ['convective', r => r.pplConv, '#ef7d00'], ['latent', r => r.pplLat, '#0f9fb0']], z: true },
+  lights: { t: 'Lights', u: 'W',
+    d: `<p>All the electric power of the lamps ends up as heat in the room. It leaves as <b>visible</b> light and <b>radiant</b> heat, which land on the surfaces first, and a small <b>convective</b> share that warms the air at once. With extract luminaires, part could go to the return air instead.</p>`,
+    f: `P = Q<sub>vis</sub> + Q<sub>rad</sub> + Q<sub>conv</sub> + Q<sub>ret</sub>${g('each part = its fraction × P')}`,
+    g: [['visible', r => r.litVis, '#d99a00'], ['radiant', r => r.litRad, '#7b2fd0'], ['convective', r => r.litConv, '#ef7d00']], z: true },
+  equip: { t: 'Equipment', u: 'W',
+    d: `<p>Screens, kiosks and other plug loads. Their electric power becomes heat, split between radiation to the surfaces and convection to the air.</p>`,
+    f: `Q<sub>rad</sub> = f<sub>rad</sub>·P ;  Q<sub>conv</sub> = (1 − f<sub>rad</sub>)·P`,
+    g: [['radiant', r => r.eqRad, '#7b2fd0'], ['convective', r => r.eqConv, '#ef7d00']], z: true },
+  p_rad: { t: 'Radiant fraction', d: `<p>Heat emitted as long-wave radiation. It warms the room surfaces first and reaches the air later, through convection from those surfaces, so it becomes load with a delay and a lower peak.</p>` },
+  p_conv: { t: 'Convective fraction', d: `<p>Heat passed straight to the surrounding air. It is load at once: no storage, no delay.</p>` },
+  p_vis: { t: 'Visible fraction', d: `<p>Light. It behaves like sunlight: it becomes heat where a surface absorbs it, so it is delayed like the radiant part.</p>` },
+  p_lat: { t: 'Latent fraction', d: `<p>Heat carried by water vapour. It does not change the air temperature; it adds moisture that the system must remove by drying the air.</p>` },
+  p_ret: { t: 'Return-air fraction', d: `<p>Heat taken directly by the return air of extract luminaires. It never reaches the room, only the system.</p>` },
+  sensInt: { t: 'Sensible internal gains', u: 'W',
+    d: `<p>People's sensible heat plus all the power of lights and equipment. This is a <b>heat gain</b>, not yet a load: its radiant part goes into the surfaces before it reaches the air.</p>`,
+    g: [['sensible internal gains', r => r.pplSens + r.litVis + r.litRad + r.litConv + r.litRet + r.eqRad + r.eqConv, '#ef7d00'], LOAD], z: true },
+  latInt: { t: 'Latent internal gains', u: 'W', d: `<p>The moisture released by people, as heat. Unlike the sensible gains it is load at once.</p>`,
+    g: [['latent', r => r.pplLat, '#0f9fb0']], z: true },
+  radShare: { t: 'Radiant share of the sensible gains', u: '%',
+    d: `<p>The part of the sensible internal gains (visible light included) that leaves as radiation. The higher it is, the more of the gain is stored in the mass and the later and lower its load peak.</p>`,
+    f: `(Q<sub>rad</sub> + Q<sub>vis</sub>) / Q<sub>sens</sub>`,
+    g: [['radiant share', r => { const s = r.pplSens + r.litVis + r.litRad + r.litConv + r.litRet + r.eqRad + r.eqConv; return s > 1 ? (r.pplRad + r.litRad + r.litVis + r.eqRad) / s * 100 : 0; }, '#7b2fd0']], z: true },
+  shr: { t: 'Sensible heat ratio, people', d: `<p>Sensible heat over total heat given off by the occupants. Seated, quiet people give about 0,6; it drops with activity and with warm rooms, where the body sheds more heat by sweating.</p>`,
+    f: `SHR = Q<sub>sens</sub> / (Q<sub>sens</sub> + Q<sub>lat</sub>)` },
+  // ---- room balance
+  'Solar through the glazing': { t: 'Solar through the glazing', u: 'W',
+    d: `<p>Short-wave sunlight transmitted by the glazing, beam plus diffuse. It heats nothing in the air: it is absorbed by the floor and the walls, which give it back later. Compare its peak with the load's.</p>`,
+    f: `Q<sub>τ</sub> = τ<sub>b</sub>·I<sub>b</sub>·cos θ·A<sub>g</sub> + τ<sub>d</sub>·I<sub>d</sub>·A<sub>g</sub>${g('τ<sub>b</sub>, τ<sub>d</sub> beam and diffuse transmittance', 'A<sub>g</sub> glazing area, 27 m²')}`,
+    g: bal('Solar through the glazing', [LOAD]), z: true },
+  'Conduction through the glazing': { t: 'Conduction through the glazing', u: 'W',
+    d: `<p>Heat crossing the glazing because the outside and inside differ in temperature, including the sun absorbed in the panes that flows inwards. Glass has almost no mass, so this reaches the room at once.</p>`,
+    f: `Q ≈ U·A<sub>g</sub>·(T<sub>out</sub> − T<sub>in</sub>) + absorbed solar flowing in`,
+    g: bal('Conduction through the glazing'), z: true },
+  'Opaque envelope (− = into the mass)': { t: 'Opaque envelope', u: 'W',
+    d: `<p>The heat that the walls, floor and roof give to the room at their inside faces, added up. <b>Negative</b> means the opposite: the inside faces are pushing heat into the constructions, which store it. That is how the mass takes the sun and internal radiation away from the air in the afternoon and gives it back at night.</p>`,
+    g: bal('Opaque envelope (− = into the mass)'), z: true },
+  'People, sensible': { t: 'People, sensible', u: 'W', d: `<p>Radiant plus convective heat from the occupants. Details under Conditions.</p>`, g: bal('People, sensible'), z: true },
+  Lights: { t: 'Lights', u: 'W', d: `<p>All the lamp power: visible, radiant and convective.</p>`, g: bal('Lights'), z: true },
+  Equipment: { t: 'Equipment', u: 'W', d: `<p>All the plug-load power: radiant and convective.</p>`, g: bal('Equipment'), z: true },
+  Infiltration: { t: 'Infiltration', u: 'W', d: `<p>Sensible heat brought by outdoor air leaking in. Positive when outdoors is warmer than the room.</p>`,
+    f: `Q<sub>inf</sub> = ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>air</sub>)`, g: bal('Infiltration'), z: true },
+  'Room sensible load (sum)': { t: 'Room sensible load, from the parts', u: 'W',
+    d: `<p>Every sensible flow that enters the room air, added up at the room boundary: what the envelope gives at its inside faces, the internal gains and infiltration. With the air held at a constant temperature it must equal the load the system removes. It is the check that the balance closes.</p>`,
+    g: [['sum of the parts', r => BAL_ROWS.reduce((a, [, f]) => a + f(r), 0), '#1b1b1b'], LOAD], z: true },
+  'simulated zone load': { t: 'Simulated zone load', u: 'W',
+    d: `<p>The sensible heat the system must remove (positive) or add (negative) to hold the room air at its setpoint, as calculated by the simulation. Outdoor air is not included: it is a system load.</p>`,
+    g: [LOAD], z: true },
+  'People, latent': { t: 'People, latent', u: 'W', d: `<p>Moisture from the occupants, as heat. It is room latent load at once.</p>`, g: [['latent', r => r.pplLat, '#0f9fb0']], z: true },
+  'Room, sensible': { t: 'Room sensible load', u: 'W', d: `<p>The room's share of the system load: the simulated zone load above.</p>`, g: [LOAD], z: true },
+  'Outdoor air after recovery': { t: 'Outdoor air after recovery', u: 'W',
+    d: `<p>The load of bringing the ventilation air from its temperature after the heat recovery to the room's. The recovery has already taken part of it back from the exhaust air.</p>`,
+    f: `Q<sub>OA</sub> = ṁ·c<sub>p</sub>·(T<sub>mix</sub> − T<sub>air</sub>) ;  Q<sub>rec</sub> = ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)`,
+    g: [['after recovery', r => r.oaSens, '#6f8fb0'], ['recovered', r => r.hrSens, '#9a958d']], z: true },
+  'System sensible load': { t: 'System sensible load', u: 'W',
+    d: `<p>What the coil must deliver: the room sensible load plus the outdoor air after recovery. This is the figure that sizes the equipment.</p>`,
+    g: [['system', r => r.loadS + r.oaSens, '#1b1b1b'], LOAD], z: true },
+  'System latent load (room + outdoor air)': { t: 'System latent load', u: 'W',
+    d: `<p>The moisture the system must remove, as heat: from the people in the room and from the outdoor air after the recovery.</p>`,
+    g: [['system latent', r => r.loadL + r.oaLat, '#0f9fb0']], z: true },
+};
+const TIP_FMT = { '°C': v => `${f1(v)} °C`, '°': v => `${f1(v)}°`, 'g/kg': v => `${f1(v)} g/kg`, 'W/m²': v => `${f0(v)} W/m²`, W: v => Math.abs(v) >= 1000 ? kW(v) : Wf(v), 'L/s': v => `${f0(v)} L/s`, ACH: v => f2(v), '%': v => `${f0(v)} %` };
+function spark(ser, unit, zero) {   // 24 h, every time step, with the current one marked
+  const Wd = 286, Hd = 96, F = TIP_FMT[unit] || f1, pts = ser.map(x => Array.from({ length: 480 }, (_, j) => x[1](row(j))));
+  let lo = Infinity, hi = -Infinity; for (const a of pts) for (const v of a) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (zero) { lo = Math.min(0, lo); hi = Math.max(0, hi); }
+  if (hi - lo < 1e-6) { hi += 1; lo -= zero && lo >= 0 ? 0 : 1; }
+  const pad = (hi - lo) * .1; hi += pad; if (!zero || lo < 0) lo -= pad;
+  const Y = v => (3 + (hi - v) / (hi - lo) * (Hd - 17)).toFixed(1), X = j => (j / 480 * Wd).toFixed(1), r = S.r, now = ((r.i + .5) / 480 * Wd).toFixed(1);
+  const grid = [0, 6, 12, 18, 24].map(h => `<line x1="${X(h * 20)}" x2="${X(h * 20)}" y1="2" y2="${Hd - 14}" stroke="#efece6"/><text x="${X(h * 20)}" y="${Hd - 3}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${String(h).padStart(2, '0')}</text>`).join('');
+  const zl = lo < 0 && hi > 0 ? `<line x1="0" x2="${Wd}" y1="${Y(0)}" y2="${Y(0)}" stroke="#b9b5ae" stroke-dasharray="3 3"/>` : '';
+  const lines = ser.map((x, s) => `<polyline points="${pts[s].map((v, j) => `${X(j)},${Y(v)} ${X(j + 1)},${Y(v)}`).join(' ')}" fill="none" stroke="${x[2]}" stroke-width="1.6"/>`).join('');
+  const dots = ser.map((x, s) => `<circle cx="${now}" cy="${Y(pts[s][r.i])}" r="2.8" fill="${x[2]}" stroke="#fff"/>`).join('');
+  return `<div class="sp"><svg width="${Wd}" height="${Hd}" style="display:block;font:9.5px 'IBM Plex Sans'">${grid}${zl}${lines}<line x1="${now}" x2="${now}" y1="2" y2="${Hd - 14}" stroke="#1b1b1b"/>${dots}
+    <text x="${Wd}" y="10" text-anchor="end" paint-order="stroke" stroke="#fff" stroke-width="3">${F(hi - pad)}</text></svg>
+    <div class="sl">${ser.map((x, s) => `<span><i style="background:${x[2]}"></i>${x[0]}</span><b>${F(pts[s][r.i])}</b>`).join('')}</div></div>`;
+}
+const tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.setAttribute('role', 'tooltip'); document.body.appendChild(tipEl);
+let tipKey = null, tipI = '', tipAnchor = null;
+function renderTip() {
+  const T = TIPS[tipKey]; if (!T || !S.r) return; tipI = `${S.r.i}|${season}`;
+  tipEl.innerHTML = `<div class="tt">${T.t}${T.est ? '<span class="est">estimated</span>' : ''}</div>${T.d}${T.f ? `<div class="tf">${T.f}</div>` : ''}${T.g ? spark(T.g, T.u, T.z) : ''}`;
+  const a = $('right').querySelector(`[data-tip="${CSS.escape(tipKey)}"]`); if (a) { tipAnchor = a; placeTip(a); }
+}
+function placeTip(el) {
+  const pr = $('right').getBoundingClientRect(), er = el.getBoundingClientRect(), h = tipEl.offsetHeight;
+  tipEl.style.left = `${Math.max(8, pr.left - tipEl.offsetWidth - 10)}px`;
+  tipEl.style.top = `${Math.max(10, Math.min(er.top + er.height / 2 - h / 2, innerHeight - h - 74))}px`;
+}
+function showTip(el) { const k = el.dataset.tip; if (!TIPS[k]) return; tipAnchor = el; if (k !== tipKey) { tipKey = k; renderTip(); } else placeTip(el); tipEl.classList.add('on'); }
+function hideTip() { tipKey = null; tipAnchor = null; tipEl.classList.remove('on'); }
+$('right').addEventListener('mousemove', e => { const el = e.target.closest('[data-tip]'); if (el) { if (el.dataset.tip !== tipKey) showTip(el); } else if (tipKey) hideTip(); });
+$('right').addEventListener('mouseleave', hideTip);
+$('right').addEventListener('focusin', e => { const el = e.target.closest('[data-tip]'); if (el) showTip(el); });
+$('right').addEventListener('focusout', hideTip);
+$('right').addEventListener('scroll', hideTip, true);
+addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
 let condKey = '', balKey = '';
 let rightTab = 'bal';
 function setRightTab(t) {   // one panel at a time: the room balance or the conditions
-  rightTab = t; setSeg('rightSeg', 't', t);
+  rightTab = t; setSeg('rightSeg', 't', t); hideTip();
   $('rightSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
   $('bal').hidden = t !== 'bal'; $('cond').hidden = t !== 'cond'; condKey = ''; balKey = '';
   try { localStorage.setItem('tl-right-tab', t); } catch (e) {}
@@ -1561,6 +1751,7 @@ function frame(now) {
   for (const L of LAYERS) L.end(); drawLabels();
 
   const bk = `${i}|${season}|${balMode}`; if (rightTab === 'bal' && bk !== balKey && (balMode === 'step' || !balKey.endsWith(season + '|day'))) { balKey = bk; renderBalance(r); }
+  if (tipKey && tipI !== `${i}|${season}`) renderTip();
   const cdk = `${i}|${season}`; if (rightTab === 'cond' && cdk !== condKey) { condKey = cdk; renderConditions(r); }
   const ck = `${cur}|${i}|${season}`;
   if (ck !== cardKey) {
