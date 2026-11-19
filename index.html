@@ -412,6 +412,7 @@ function row(i) {
     surfConv: g(z.surfConv), intConv: g(z.intConv), oaTransfer: g(z.oaTransfer), sysConv: g(z.sysConv), airStore: g(z.airStore), S: {} };
   // the simulation's outdoor-air load is taken from outdoor conditions, before the recovery: split it by hand (matches it within 0,2 %)
   const mcpOA = 1.2 * r.oaFlow * 1006; r.oaNoRec = mcpOA * (r.Tout - r.Tair); r.oaAfter = mcpOA * (r.Tmix - r.Tair); r.oaRec = r.oaNoRec - r.oaAfter;   // so the three always add up
+  r.coilS = g(z.supSensCool) - g(z.supSensHeat);   // sensible load at the coil: room load + outdoor air after recovery
   r.Qinc = r.Iinc * AG; r.Qref = Math.max(0, r.Qinc - r.Qtr - r.Qabs);
   r.incRoof = sf.incOut.Cubierta[i]; r.TsoRoof = sf.Tout.Cubierta[i];   // irradiance on the roof and its simulated outside-face temperature
   for (const f of FACES) r.S[f] = { T: sf.Tin[f][i], sol: sf.solIn[f][i], ir: sf.intRad[f][i], lw: sf.lw[f][i], conv: sf.conv[f][i], cond: sf.cond[f][i] };
@@ -941,7 +942,7 @@ const GLOSS = {
   'θ': 'angle of incidence to the glazing normal', 'A_{g}': 'glazing area, 27 m²', 'A_{sunlit}': 'sunlit floor area, m²', 'A': 'surface area, m²',
   'Q_{inc}': 'solar radiation incident on the glazing, W', 'Q_{beam}': 'transmitted beam radiation, W', 'Q_{sens}': 'sensible heat per person, W', 'Q_{conv}': 'convective heat flow, W',
   'Q_{lat}': 'latent heat flow, W', 'Q_{lw}': 'net long-wave flow, W', 'Q_{cond}': 'conduction, W', 'Q_{vis}': 'visible radiation, W', 'Q_{rad}': 'radiant heat, W', 'Q_{ret}': 'heat to the return air, W',
-  'Q_{gain}': 'sun + internal sensible gains, W', 'Q_{env}': 'glazing conduction + infiltration, W', 'Q_{air}': 'heat stored in the room air, W', 'Q_{cv,surf}': 'convection from the surfaces to the air, W', 'Q_{cv,int}': 'convective internal gains, W', 'Q_{sys}': 'heat the system puts into the air (− = removes), W', 'Q_{cd}': 'inside-face conduction of walls, roof and slab, W', 'Q_{st}': 'heat storage rate, W', 'Q_{inf}': 'infiltration heat flow, W',
+  'Q_{gain}': 'sun + internal sensible gains, W', 'Q_{env}': 'glazing conduction + infiltration, W', 'Q_{air}': 'heat stored in the room air, W', 'Q_{cv,surf}': 'convection from the surfaces to the air, W', 'Q_{cv,int}': 'convective internal gains, W', 'Q_{sys}': 'heat the system puts into the air (− = removes), W', 'Q_{lat,people}': 'latent gain of the occupants, W', 'Q_{lat,inf}': 'latent load of infiltration, W', 'Q_{lat,air}': 'moisture stored in the room air, as heat, W', 'Q_{coil,s}': 'coil sensible load, W', 'Q_{OA}': 'outdoor-air load after recovery, W', 'Q_{cd}': 'inside-face conduction of walls, roof and slab, W', 'Q_{st}': 'heat storage rate, W', 'Q_{inf}': 'infiltration heat flow, W',
   'q_{patch}': 'direct-beam flux on the sunlit floor area, W/m²', 'q_{abs}': 'absorbed flux, W/m²', 'q_{lw}': 'net long-wave flux, W/m²', 'q_{conv}': 'convective flux, W/m²', 'q_{cond}': 'conductive flux, W/m²', 'q̄': 'mean absorbed flux over the floor, W/m²',
   'τ': 'solar transmittance of the glazing', 'α_{s}': 'solar absorptance of the floor', 'α': 'solar absorptance of the panes', 'N_{i}': 'inward-flowing fraction of the absorbed solar',
   'ε': 'long-wave emissivity', 'ε_{g}': 'emissivity of the glass, 0,84', 'ε_{f}': 'emissivity of the floor tile, 0,9', 'σ': 'Stefan–Boltzmann constant, 5,67·10⁻⁸ W/m²K⁴', 'F': 'view factor',
@@ -986,6 +987,9 @@ function seriesFor(st) {
   const M = {
     loadDef: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)], room: [],
     designDay: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
+    moisture: [ser('Q<sub>lat,people</sub> occupants', r => r.pplLat, C.vap), ser('Q<sub>lat,inf</sub> infiltration', r => latBal(r).inf, C.grey), ser('Q<sub>l</sub> latent load', r => r.loadL, C.load)],
+    coil: [ser('Q<sub>coil,s</sub> coil sensible', r => r.coilS, C.ink), ser('Q<sub>s</sub> room sensible', r => r.loadS, C.load), ser('Q<sub>l</sub> room latent', r => r.loadL, C.vap)],
+    thermostat: [ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load), ser('T<sub>heat</sub> heating setpoint, °C', () => 21, C.cond), ser('T<sub>cool</sub> cooling setpoint, °C', () => 25, '#4b6ba9')],
     gainsAmount: [ser('Q<sub>people</sub> people, sensible + latent', r => r.pplSens + r.pplLat, C.lw), ser('P<sub>lights</sub> lights', r => r.litVis + r.litRad + r.litConv + r.litRet, C.sun), ser('P<sub>equip</sub> equipment', r => r.eqRad + r.eqConv, C.grey)],
     outdoor: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load)],
     skySolair: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>sky</sub> sky, °C', r => r.Tsky, '#4b6ba9'), ser('T<sub>sa</sub> sol-air, roof (est.), °C', solAirRoof, C.sun), ser('T<sub>so</sub> roof outside face, °C', r => r.TsoRoof, C.ink)],
@@ -1056,6 +1060,11 @@ const ABOUT = {
   'Q_{people}': ['People', 'Sensible plus latent heat released by the occupants; it follows the occupancy schedule.'],
   'P_{lights}': ['Lighting power', 'Electric power of the lamps, all released as heat in the room; it follows the lighting schedule.'],
   'P_{equip}': ['Equipment power', 'Electric power of screens, kiosks and other equipment, all released as heat; it follows the equipment schedule.'],
+  'Q_{lat,people}': ['Latent gain of the occupants', 'Water vapour released by respiration and perspiration, times its latent heat.'],
+  'Q_{lat,inf}': ['Latent load of infiltration', 'ρ·V̇·h<sub>fg</sub>·(w<sub>out</sub> − w<sub>in</sub>), computed from the humidity ratios. Negative when the outdoor air is drier than the room.'],
+  'Q_{coil,s}': ['Coil sensible load', 'Sensible heat removed (positive) or supplied (negative) by the coil: the room sensible load plus the outdoor-air load after recovery.'],
+  'T_{heat}': ['Heating setpoint', 'Below 21 °C the system heats the room air.'],
+  'T_{cool}': ['Cooling setpoint', 'Above 25 °C the system cools the room air.'],
   'T_{out}': ['Outdoor air temperature', 'Dry-bulb temperature of the outdoor air, measured in the shade.'],
   'T_{air}': ['Room air temperature', 'Temperature of the room air, taken as well mixed; the quantity the system controls.'],
   'T_{sky}': ['Sky temperature', 'Temperature of a black body that would emit the same long-wave radiation as the sky. It is not the sol-air temperature.'],
@@ -1127,6 +1136,17 @@ function processSteps() {
         return `Internal gains are the heat released inside the room by its occupants, lighting and equipment. Their amount follows the occupancy of the space and the schedules of use, so it changes through the day. Each occupant releases sensible and latent heat according to activity; lights and equipment release their electric power as heat. Now: ${n > .05 ? `${f0(n)} people (${f1(FLOOR_A / n)} m² per person)` : 'no occupants'}, lights ${f1(lit / FLOOR_A)} W/m², equipment ${f1(eqp / FLOOR_A)} W/m².`; },
       eq: r => { const n = r.occ; return eq('n', 'occupants', '', n > .05 ? `${f0(n)}` : '—') + eq('q<sub>s</sub>, q<sub>l</sub>', 'sensible and latent heat per person', '', n > .05 ? `${f0(r.pplSens / n)} and ${f0(r.pplLat / n)} W` : '—') +
         eq('P<sub>lights</sub>', 'lighting power', '', Wf(r.litVis + r.litRad + r.litConv + r.litRet)) + eq('P<sub>equip</sub>', 'equipment power', '', Wf(r.eqRad + r.eqConv)); } },
+    { id: 'moisture', g: '', title: 'Room moisture balance', t0: ho, cam: 'person', proc: ['vapour', 'infil'], an: ['people'], key: ['vap', 'air'],
+      say: r => { const L = latBal(r);
+        return `The room air gains moisture from the occupants and exchanges it with the outdoor air that leaks in; the water it holds rises or falls with its humidity ratio. The system removes the rest, which is the latent load. Each flow is a mass of water times its latent heat, ṁ·h<sub>fg</sub>, with h<sub>fg</sub> = 2.454 kJ/kg. Now: ${f1(r.wIn * 1000)} g/kg indoors, ${f1(r.wOut * 1000)} g/kg outdoors; occupants ${Wf(L.ppl)}, infiltration ${Wf(L.inf)}, latent load ${kW(r.loadL)}.`; },
+      eq: r => { const L = latBal(r); return eq('Q<sub>l</sub>', '≈ Q<sub>lat,people</sub> + Q<sub>lat,inf</sub> − Q<sub>lat,air</sub>', `${f0(L.ppl)} + ${f0(L.inf)} − ${f0(L.st)}`, Wf(r.loadL)) +
+        eq('Q<sub>lat,inf</sub>', 'infiltration, ρ·V̇·h<sub>fg</sub>·(w<sub>out</sub> − w<sub>in</sub>)', '', Wf(L.inf)) + eq('Q<sub>lat,air</sub>', 'moisture stored in the room air', '', Wf(L.st)); } },
+    { id: 'coil', g: '', title: 'Coil load: sensible, latent and SHR', t0: hl, cam: 'air', proc: ['vent', 'system'], an: [], key: ['air'],
+      say: r => `The coil conditions the supply air. Its sensible load is the room sensible load plus the outdoor-air load after heat recovery. The sensible heat ratio, SHR = Q<sub>s</sub>/(Q<sub>s</sub> + Q<sub>l</sub>), is the sensible share of the room load; a lower SHR needs a colder coil surface to dehumidify. The outdoor-air latent load is reported only when the outdoor air is more humid than the room, so the coil latent load is not shown. Now: coil sensible ${kW(r.coilS)} ≈ room ${kW(r.loadS)} + outdoor air ${kW(r.oaAfter)}; room SHR ${roomSHR(r)}.`,
+      eq: r => eq('Q<sub>coil,s</sub>', '≈ Q<sub>s</sub> + Q<sub>OA</sub>', `${f0(r.loadS)} + ${f0(r.oaAfter)}`, Wf(r.coilS)) + eq('SHR', 'room sensible heat ratio', '', roomSHR(r)) + eq('Q<sub>l</sub>', 'room latent load', '', kW(r.loadL)) },
+    { id: 'thermostat', g: '', title: 'Thermostat and setpoints', t0: hl, cam: 'overview', proc: ['system'], an: [], key: ['air'],
+      say: r => `The thermostat keeps the room air between a heating setpoint of 21 °C and a cooling setpoint of 25 °C. Below 21 °C the coil heats and above 25 °C it cools; between the two it is idle and the air temperature floats, while the supply air, at the temperature it leaves the heat recovery, still adds or removes heat. Now: air ${f1(r.Tair)} °C, ${r.coilS > 50 ? `the coil cools (${kW(r.coilS)})` : r.coilS < -50 ? `the coil heats (${kW(-r.coilS)})` : 'the coil is idle'}; room sensible load ${kW(r.loadS)}.`,
+      eq: r => eq('T<sub>air</sub>', 'room air temperature', '', `${f1(r.Tair)} °C`) + eq('Q<sub>coil,s</sub>', 'coil sensible load (+ cooling, − heating)', '', kW(r.coilS)) },
     { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
       say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
         return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
@@ -1205,9 +1225,13 @@ function processSteps() {
 const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', tsky: 'Sky temperature', solair: 'Sol-air temperature', sun: 'Sun', dni: 'Direct normal', dhi: 'Diffuse horizontal',
   tair: 'Air temperature', mrt: 'Mean radiant', top: 'Operative', humIn: 'Indoor humidity', oa: 'Outdoor air', infil: 'Infiltration', people: 'People', lights: 'Lights', equip: 'Equipment',
   sensInt: 'Sensible internal gains', latInt: 'Latent internal gains', radShare: 'Radiant share', shr: 'Sensible heat ratio' };
-const COND_OF = { gainsAmount: ['people', 'lights', 'equip'], outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+const COND_OF = { moisture: ['humIn', 'humOut', 'latInt'], thermostat: ['tair'], gainsAmount: ['people', 'lights', 'equip'], outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
   convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
 const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
+// room moisture balance, from the humidity ratios: occupants + infiltration − moisture stored in the air ≈ latent load (W)
+const H_FG = 2454e3;
+function latBal(r) { const p = row(Math.max(0, r.i - 1)); return { ppl: r.pplLat, inf: 1.2 * r.infFlow * H_FG * (r.wOut - r.wIn), st: r.i ? 1.2 * ROOM_V * H_FG * (r.wIn - p.wIn) / (SB[season].step_min * 60) : 0 }; }
+const roomSHR = r => r.loadS > 1 && r.loadL >= 0 ? f2(r.loadS / (r.loadS + r.loadL)) : '—';
 // steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
 const layersR = name => SB.constructions[name].layers.reduce((a, l) => a + l.thickness / SB.materials[l.material].conductivity, 0);
 function uValue(name) {
@@ -1414,16 +1438,16 @@ const CHAPTERS = [
     takeaway: 'Thermal mass delays and lowers the load peak: heat stored during the day is released at night.',
     q: 'What reverses the heat flow in the slab in the evening?',
     a: 'The floor surface becomes colder than the concrete below it, so the temperature gradient reverses.' },
-  { k: 'air', name: 'Room air', ids: ['airbal', 'gainload'],
+  { k: 'air', name: 'Room air', ids: ['airbal', 'moisture', 'gainload'],
     aim: 'The heat and moisture balances of the room air, and the difference between heat gain and load.',
     takeaway: 'The load is what reaches the air; it differs from the heat gain by the heat stored in the construction.',
     q: 'When Q<sub>cd</sub> is negative, where is the difference between heat gain and load?',
     a: 'Stored in the walls, roof and slab.' },
-  { k: 'system', name: 'System', ids: ['vent'],
+  { k: 'system', name: 'System', ids: ['vent', 'coil', 'thermostat'],
     aim: 'What the system handles: outdoor air, heat recovery, the coil and the thermostat.',
     takeaway: 'The coil load is the room load plus the outdoor-air load after recovery; the thermostat decides when it heats or cools.',
     q: 'On the winter day the outdoor air is near 2 °C. Why does the room need cooling in the afternoon?',
-    a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose.' },
+    a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose; the ventilation air, cooler than the room after the heat recovery, removes the surplus while the coil is idle.' },
   { k: 'results', name: 'Results', ids: [],
     aim: "The design figures: peak load, the two seasons, comfort and the day's energy.",
     takeaway: 'The peak sensible and latent loads size the system; comfort is judged on the operative temperature.',
@@ -1472,6 +1496,15 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
   } catch (e) { bad.push(`chapter 0: ${e.message}`); }
   // chapter 1: at night the roof sol-air temperature falls below the air (long-wave loss to the sky)
   try { const keepS = season; season = 'summer'; const r3 = row(60); season = keepS; if (!(solAirRoof(r3) < r3.Tout)) bad.push('sol-air not below the air at 03:00'); } catch (e) { bad.push(`chapter 1: ${e.message}`); }
+  // chapters 6–7: coil sensible = room load + outdoor air after recovery; the thermostat text follows the coil
+  try {
+    const keepS = season;
+    for (const se of ['summer', 'winter']) { season = se; let sa = 0, n = 0; for (let i = 0; i < 480; i++) { const r = row(i); if (Math.abs(r.coilS) > 50) { sa += Math.abs(r.coilS - (r.loadS + r.oaAfter)); n++; } }
+      if (!n || sa / n > 60) bad.push(`${se}: coil sensible does not close (mean ${n ? f0(sa / n) : '—'} W)`); }
+    season = 'winter'; const th = processSteps().find(x => x.id === 'thermostat');
+    for (const i of [100, 340]) { const r = row(i), txt = th ? th.say(r) : ''; const want = r.coilS > 50 ? 'the coil cools' : r.coilS < -50 ? 'the coil heats' : 'the coil is idle'; if (!txt.includes(want)) bad.push(`thermostat at winter ${stepLabel(i)} does not say '${want}'`); }
+    season = keepS;
+  } catch (e) { bad.push(`chapters 6–7: ${e.message}`); }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
