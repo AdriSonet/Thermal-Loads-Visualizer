@@ -1,0 +1,1621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Room processes · look test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b1b1b; --ink-2: #3a3a3a; --muted: #6e6b66; --line: #e3dfd8; --line-2: #efece6;
+    --paper: #fbfaf7; --surface: rgba(252,251,248,.96); --chip: #f1eee8; --hover: #f3f0ea;
+    --focus: #2f6fc0; --r-panel: 12px; --r-ctl: 8px;
+    --shadow: 0 8px 28px rgba(40,32,20,.08), 0 1px 3px rgba(40,32,20,.06);
+    --nav-w: 264px; --card-w: 448px; --gap: 14px; --bar-h: 64px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: #cfe0f5; color: var(--ink); }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+  * { scrollbar-width: thin; scrollbar-color: #d6d1c8 transparent; }
+  svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  svg.i.fill { fill: currentColor; stroke: none; }
+
+  #labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  .lab { position: absolute; transform: translate(10px, -50%); font-size: 12px; white-space: nowrap; background: rgba(252,251,248,.9); padding: 1px 5px; border-radius: 4px; }
+  .lab b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .lab.est { color: #7a5b00; }
+
+  /* ---- panels share one surface */
+  #nav, #card { position: fixed; z-index: 3; background: var(--surface); border-radius: var(--r-panel); box-shadow: var(--shadow); }
+
+  /* ---- navigator */
+  #nav { top: var(--gap); left: var(--gap); bottom: calc(var(--bar-h) + 6px); width: var(--nav-w); display: flex; flex-direction: column; overflow: hidden; transition: width .28s cubic-bezier(.2,.8,.2,1); }
+  .nav-head { display: flex; align-items: center; gap: 8px; padding: 14px 12px 10px 16px; }
+  .brand { flex: 1; font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+  .icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-ctl); border: 0; background: transparent; color: var(--ink-2); }
+  .icon:hover { background: var(--hover); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; margin: 0 12px; background: var(--chip); border-radius: 10px; }
+  .seg button { border: 0; background: transparent; border-radius: 8px; padding: 6px 8px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .seg button:hover { color: var(--ink); }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  #steps { flex: 1; overflow: auto; padding: 10px 8px 8px; }
+  #steps .g { font-size: 12px; font-weight: 600; color: var(--muted); padding: 12px 8px 4px; }
+  #steps .g:first-child { padding-top: 2px; }
+  #steps .s { width: 100%; text-align: left; border: 0; background: transparent; font-size: 13px; line-height: 1.35; padding: 6px 8px; border-radius: var(--r-ctl); display: flex; gap: 10px; color: var(--ink-2); }
+  #steps .s .n { color: #a29d95; font-variant-numeric: tabular-nums; width: 16px; flex: none; text-align: right; }
+  #steps .s:hover { background: var(--hover); }
+  #steps .s.on { background: var(--ink); color: #fff; }
+  #steps .s.on .n { color: #9c9890; }
+  #steps .el { width: 100%; text-align: left; border: 0; background: transparent; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: var(--r-ctl); font-size: 13.5px; font-weight: 500; color: var(--ink); }
+  #steps .el:hover { background: var(--hover); }
+  #steps .el .c { margin-left: auto; font-size: 11.5px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+  #steps .el svg { transition: transform .2s; color: var(--muted); }
+  #steps .el.open svg { transform: rotate(90deg); }
+  #steps .sub { padding: 0 0 6px 14px; margin-left: 8px; border-left: 1px solid var(--line); }
+  #steps .sub.nest { padding-bottom: 2px; }
+  #steps .el.cpt { align-items: flex-start; line-height: 1.3; }
+  #steps .el.cpt svg { margin-top: 1px; }
+  #steps .cdef { margin: -2px 8px 6px 32px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .seg button { padding: 6px 4px; }
+  #steps .sub.nest .el { font-weight: 400; }
+  .nav-foot { padding: 10px 0 12px; border-top: 1px solid var(--line-2); display: grid; gap: 8px; }
+  .nav-foot .src { margin: 0 16px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .rail { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
+  .rail .pos { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  body.navclosed #nav { width: 56px; }
+  body.navclosed #nav > :not(.rail) { display: none; }
+  body.navclosed .rail { display: flex; }
+
+  /* ---- step card */
+  #card { top: var(--gap); bottom: calc(var(--bar-h) + 6px); left: calc(var(--nav-w) + 2 * var(--gap)); width: var(--card-w); overflow: auto; padding: 16px 18px 18px; transition: left .28s cubic-bezier(.2,.8,.2,1); }
+  body.navclosed #card { left: calc(56px + 2 * var(--gap)); }
+  #card .head { display: flex; align-items: flex-start; gap: 10px; }
+  #card h2 { flex: 1; font-size: 21px; line-height: 1.2; font-weight: 600; letter-spacing: -.015em; margin: 2px 0 0; text-wrap: balance; }
+  #card .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 7px; white-space: nowrap; }
+  #card .say { font-size: 14px; line-height: 1.5; margin: 10px 0 0; color: var(--ink-2); max-width: 60ch; }
+  #card.folded { bottom: auto; }
+  #card.folded #cBody { display: none; }
+  .sect { font-size: 12px; font-weight: 600; color: var(--muted); margin: 18px 0 7px; display: flex; align-items: center; gap: 8px; }
+  .sect::after { content: ""; flex: 1; border-top: 1px solid var(--line-2); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+  .kpi { background: var(--chip); border-radius: var(--r-ctl); padding: 8px 10px 9px; }
+  .kpi .s { font-size: 12px; color: var(--muted); }
+  .kpi .s .sym { font-style: italic; font-size: 13px; color: var(--ink); }
+  .kpi .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.3; letter-spacing: -.01em; }
+  .kpi .l { font-size: 11px; color: var(--muted); line-height: 1.3; }
+  .formula { border: 1px solid var(--line); border-radius: var(--r-ctl); background: #fff; }
+  .formula .eq { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 4px 8px; padding: 9px 12px; border-top: 1px solid var(--line-2); font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.5; }
+  .formula .eq:first-child { border-top: 0; }
+  .formula .eq:not(:has(> .res)) { display: block; }
+  .formula .eq .sym { font-family: "IBM Plex Sans"; font-style: italic; font-size: 14px; }
+  .formula .eq .sub { grid-column: 2 / 4; color: var(--muted); font-size: 11px; }
+  .formula .eq .defs { grid-column: 1 / 4; display: flex; flex-wrap: wrap; gap: 3px 14px; font-family: "IBM Plex Sans"; font-size: 11.5px; color: var(--muted); padding-top: 6px; margin-top: 3px; border-top: 1px solid var(--line-2); }
+  .formula .eq .defs i { font-style: italic; color: var(--ink); margin-right: 3px; }
+  .formula .eq .res { font-family: "IBM Plex Sans"; font-weight: 600; font-size: 14px; background: var(--chip); border-radius: 6px; padding: 2px 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .eq sub, .eq sup, .kpi sub, .lg sub { font-size: 70%; }
+  .tag { font-family: "IBM Plex Sans"; font-size: 10.5px; font-weight: 500; border-radius: 4px; padding: 1px 5px; margin-left: 6px; font-style: normal; }
+  .tag.est { background: #fbf0d0; color: #7a5b00; } .tag.geo { background: #ecebe8; color: #555; }
+  .chart { border: 1px solid var(--line); border-radius: var(--r-ctl); background: #fff; padding: 10px 12px 8px; }
+  .chart svg text { fill: #9a958d; }
+  .chart .lg { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .chart .lg b { text-align: right; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chart .about { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-2); display: grid; gap: 7px; }
+  .chart .about p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-2); max-width: 62ch; }
+  .chart .about b { font-weight: 600; color: var(--ink); }
+  .chart .about .an { font-family: "IBM Plex Sans"; color: var(--ink); margin-right: 1px; }
+  .chart .about sub { font-size: 70%; }
+  .chart .lg i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+
+  /* ---- temperature scale */
+  #right { position: fixed; z-index: 3; right: var(--gap); top: var(--gap); bottom: calc(var(--bar-h) + 6px); width: 312px; display: flex; flex-direction: column;
+    background: var(--surface); border-radius: var(--r-panel); box-shadow: var(--shadow); overflow: hidden; font-size: 12px; }
+  .rsec { padding: 14px 16px 14px; }
+  .rsec + .rsec { border-top: 1px solid var(--line-2); }
+  .rsec.grow { flex: 1; overflow: auto; }
+  .rscroll { flex: 1; overflow: auto; }
+  .rtabs { padding: 12px 16px 0; border-top: 1px solid var(--line-2); }
+  .rtabs .seg { margin: 0; }
+  .rscroll .rsec { padding-top: 12px; }
+  .rh .when { flex: 1; }
+  .rscroll .rsec + .rsec { border-top: 1px solid var(--line-2); }
+  .rh .when { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .icon.sm { width: 26px; height: 26px; margin: -4px -6px -4px 0; }
+  .cgrp { font-size: 11.5px; font-weight: 600; color: var(--muted); margin: 12px 0 6px; }
+  .cgrp:first-child { margin-top: 0; }
+  .cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .cst { background: var(--chip); border-radius: 6px; padding: 5px 8px 6px; min-width: 0; }
+  .cst .l { font-size: 10.5px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cst .v { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cst .v small { font-size: 11px; font-weight: 400; color: var(--muted); }
+  .gsrc { padding: 8px 0 9px; border-top: 1px solid var(--line-2); }
+  .gsrc:first-of-type { border-top: 0; padding-top: 2px; }
+  .gsrc .sh { display: flex; align-items: baseline; gap: 6px; }
+  .gsrc .sh .n { font-weight: 600; font-size: 12.5px; }
+  .gsrc .sh .m { flex: 1; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gsrc .sh .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stack { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 0 5px; background: var(--line-2); gap: 1px; }
+  .stack i { display: block; height: 100%; }
+  .parts { display: grid; grid-template-columns: auto 1fr auto auto; gap: 1px 8px; font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; align-items: center; }
+  .parts .d { width: 8px; height: 8px; border-radius: 2px; }
+  .parts .p { color: var(--muted); text-align: right; }
+  .parts .w { text-align: right; }
+  .gtot { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding-top: 8px; border-top: 1px solid var(--line-2); }
+  .gtot .k { color: var(--muted); } .gtot .x { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rh { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .rh .t { flex: 1; font-size: 13px; font-weight: 600; }
+  #lg { width: 100%; height: 10px; border-radius: 5px; display: block; }
+  .hticks { position: relative; height: 16px; margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+  .hticks span:first-child { transform: none; } .hticks span:last-child { transform: translateX(-100%); }
+  .hticks span.air { color: var(--ink); font-weight: 600; top: 0; }
+  .hticks span.air::before { content: ""; position: absolute; left: 50%; top: -9px; height: 8px; border-left: 1.5px solid var(--ink); }
+  .seg.mini { margin: 0; padding: 2px; border-radius: 8px; }
+  .seg.mini button { padding: 3px 9px; font-size: 12px; border-radius: 6px; }
+  #bal.folded #balBody { display: none; }
+  #bal .grp { font-size: 11.5px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; display: flex; justify-content: space-between; }
+  #bal .grp b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #bal .row { display: grid; grid-template-columns: 1fr 86px 64px; align-items: center; gap: 8px; padding: 2.5px 0; }
+  #bal .row .n { color: var(--ink-2); line-height: 1.25; }
+  #bal .row .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  #bal .row .b { position: relative; height: 8px; background: var(--line-2); border-radius: 4px; }
+  #bal .row .b i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+  #bal .row .b::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid #c9c4bb; }
+  .bnote { margin: -2px 0 6px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+  #bal .tot { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-2); }
+  #bal .tot .k { color: var(--muted); }
+  #bal .tot .x { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #bal .tot .big { font-size: 18px; letter-spacing: -.01em; }
+  body.clean #right { display: none; }
+  #fps { position: fixed; z-index: 3; right: 18px; bottom: calc(var(--bar-h) + 10px); font: 11px "IBM Plex Mono", monospace; color: #a29d95; }
+
+  /* ---- transport bar */
+  .bar { position: fixed; left: var(--gap); right: var(--gap); bottom: 10px; height: 48px; z-index: 4; display: flex; align-items: center; gap: 14px; padding: 0 10px 0 6px;
+    background: var(--surface); border-radius: var(--r-panel); box-shadow: var(--shadow); }
+  .transport { display: flex; align-items: center; gap: 2px; }
+  .icon.play { width: 36px; height: 36px; border-radius: 50%; background: var(--ink); color: #fff; }
+  .icon.play:hover { background: #333; }
+  #time { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; width: 104px; letter-spacing: -.01em; white-space: nowrap; }
+  .track { flex: 1; position: relative; height: 34px; }
+  .track input { position: absolute; inset: 4px 0 auto 0; width: 100%; accent-color: var(--ink); }
+  .ticks2 { position: absolute; left: 0; right: 0; bottom: 1px; display: flex; justify-content: space-between; font-size: 10px; color: #a29d95; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .bar .sep { width: 1px; height: 24px; background: var(--line); }
+
+  body.clean #nav, body.clean #card, body.clean #fps { display: none; }
+</style>
+<script src="data.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 6l-8 6 8 6V6zM6 6v12"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 6l8 6-8 6V6zM18 6v12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></symbol>
+</svg>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<nav id="nav" aria-label="Steps">
+  <div class="nav-head">
+    <div class="brand">Room processes</div>
+    <button class="icon" id="navClose" aria-label="Collapse the navigator (L)" title="Collapse (L)"><svg class="i"><use href="#i-left"/></svg></button>
+  </div>
+  <div class="seg" id="modeSeg" role="tablist">
+    <button role="tab" data-mode="process" class="on">Story</button>
+    <button role="tab" data-mode="element">Elements</button>
+    <button role="tab" data-mode="concept">Concepts</button>
+  </div>
+  <div id="steps"></div>
+  <div class="nav-foot">
+    <div class="seg" id="seasonSeg"><button data-s="summer" class="on">Summer peak</button><button data-s="winter">Winter peak</button></div>
+    <p class="src">Shoebox, Zaragoza · simulated peak days, 3-minute steps</p>
+  </div>
+  <div class="rail">
+    <button class="icon" id="navOpen" aria-label="Open the navigator (L)" title="Open (L)"><svg class="i"><use href="#i-panel"/></svg></button>
+    <span class="pos" id="railPos"></span>
+  </div>
+</nav>
+<section id="card">
+  <div class="head">
+    <h2 id="cT"></h2>
+    <span class="count" id="cCount"></span>
+    <button class="icon" id="fold" aria-label="Fold the panel" title="Fold"><svg class="i"><use href="#i-minus"/></svg></button>
+  </div>
+  <div id="cBody">
+    <p class="say" id="cS"></p>
+    <div id="cE"></div>
+  </div>
+</section>
+<aside id="right" aria-label="Temperature scale, conditions and room balance">
+  <section class="rsec">
+    <div class="rh"><span class="t">Surface temperature</span></div>
+    <canvas id="lg" width="560" height="20"></canvas>
+    <div class="hticks" id="lgT"></div>
+  </section>
+  <div class="rtabs">
+    <div class="seg" id="rightSeg" role="tablist" aria-label="Right panel">
+      <button role="tab" id="tabBal" data-t="bal" class="on" aria-selected="true" aria-controls="bal">Room balance</button>
+      <button role="tab" id="tabCond" data-t="cond" aria-selected="false" aria-controls="cond">Conditions</button>
+    </div>
+  </div>
+  <div class="rscroll">
+  <section class="rsec" id="bal" role="tabpanel" aria-labelledby="tabBal">
+    <div class="rh">
+      <span class="when" id="balWhen"></span>
+      <div class="seg mini" id="balSeg"><button data-b="step" class="on">Time step</button><button data-b="day">Day</button></div>
+    </div>
+    <div id="balBody"></div>
+  </section>
+  <section class="rsec" id="cond" role="tabpanel" aria-labelledby="tabCond" hidden>
+    <div class="rh"><span class="when" id="condWhen"></span></div>
+    <div id="condBody"></div>
+  </section>
+  </div>
+</aside>
+<div id="fps"></div>
+<footer class="bar">
+  <div class="transport">
+    <button class="icon" id="prev" aria-label="Previous step" title="Previous step (←)"><svg class="i"><use href="#i-prev"/></svg></button>
+    <button class="icon play" id="play" aria-label="Pause"><svg class="i fill" id="playIcon"><use href="#i-pause"/></svg></button>
+    <button class="icon" id="next" aria-label="Next step" title="Next step (→)"><svg class="i"><use href="#i-next"/></svg></button>
+  </div>
+  <span class="sep"></span>
+  <div id="time">13:00</div>
+  <div class="track">
+    <input type="range" id="range" min="0" max="23.95" step="0.05" value="13" aria-label="Time of day">
+    <div class="ticks2"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
+  </div>
+  <span class="sep"></span>
+  <button class="icon" id="full" aria-label="Full screen (F)" title="Full screen (F)"><svg class="i"><use href="#i-expand"/></svg></button>
+</footer>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+
+const SB = window.SHOEBOX;
+if (!SB) document.body.insertAdjacentHTML('beforeend', '<p style="position:fixed;top:40%;left:40%">data.js missing: run export.py</p>');
+
+// ================================================================ palette
+// marks: sunlight gold, long-wave violet, conduction vivid red, vapour teal (each drawn over a white casing)
+const INK_DEEP = new THREE.Color('#7a0a03');   // conduction drawn over the hot cut: a deeper red keeps contrast on orange
+const MARK = { sun: new THREE.Color('#ffc21a'), lw: new THREE.Color('#7b2fd0'), ink: new THREE.Color('#e3170a'), vap: new THREE.Color('#0f9fb0') };
+const PAPER = new THREE.Color('#fbfaf7'), DUSK = new THREE.Color('#dfe5ec');
+// surface temperature: the Ladybug Tools default gradient, air temperature at the cool-neutral point
+const CMAP = [[-8, '#4b6ba9'], [-4, '#7393ca'], [-1.5, '#aac8f7'], [0, '#e2e8e3'], [2, '#eef0bf'], [4, '#f5ef67'], [6.5, '#fce64a'], [9, '#ef9c15'], [11.5, '#ea7b00'], [14.5, '#ea4a00'], [18, '#ea2600']].map(([d, c]) => [d, new THREE.Color(c)]);
+function tcol(T, Tair, out = new THREE.Color()) {
+  const d = T - Tair;
+  if (!(d > CMAP[0][0])) return out.copy(CMAP[0][1]);
+  for (let i = 1; i < CMAP.length; i++) if (d <= CMAP[i][0]) return out.copy(CMAP[i - 1][1]).lerp(CMAP[i][1], (d - CMAP[i - 1][0]) / (CMAP[i][0] - CMAP[i - 1][0]));
+  return out.copy(CMAP[CMAP.length - 1][1]);
+}
+
+// ================================================================ geometry & helpers
+const W = 12, D = 8, H = 4, T = 0.305;
+const WIN = { x0: 1.5, x1: 10.5, y0: 0.5, y1: 3.5 }, AG = 27, SIGMA = 5.67e-8;
+const AREA = { Suelo: 96, Cubierta: 96, Muro_N: 48, Muro_S: 21, Muro_E: 32, Muro_W: 32, Glass: 27 };
+const NAME = { Suelo: 'Floor', Cubierta: 'Roof', Muro_N: 'North wall', Muro_S: 'South wall', Muro_E: 'East wall', Muro_W: 'West wall', Glass: 'Glazing' };
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const frac = x => ((x % 1) + 1) % 1;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+// decimal comma, point for thousands (es-ES), true minus sign
+const nf = (x, d) => Number(x).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: Math.abs(x) >= 1000 ? 'always' : false }).replace('-', '−');
+const f0 = x => nf(Math.round(x), 0), f1 = x => nf(x, 1), f2 = x => nf(x, 2), f3 = x => nf(x, 3);
+const kW = w => `${f2(w / 1000)} kW`;
+const Wf = w => `${f0(w)} W`;
+const stepLabel = i => `${hhmm(i / 20)}–${i >= 479 ? '24:00' : hhmm((i + 1) / 20)}`;
+const hhmm = t => `${String(Math.floor(t) % 24).padStart(2, '0')}:${String(Math.floor((t % 1) * 60 + 1e-6)).padStart(2, '0')}`;
+const tag = k => k === 'ep' ? '' : `<span class="tag ${k}">${{ est: 'estimated', geo: 'geometry' }[k]}</span>`;
+function sunlitAt(p, sv, up) { return sunlitXZ(p.x, p.y, p.z, sv, up); }
+function sunlitXZ(x, y, z, sv, up) {   // trace back towards the sun to the glazing plane (z = 0): scalar, no allocation
+  if (!up || sv.z >= 0) return false;
+  const s = -z / sv.z, qx = x + sv.x * s, qy = y + sv.y * s;
+  return qx > WIN.x0 && qx < WIN.x1 && qy > WIN.y0 && qy < WIN.y1;
+}
+function hitRoom(p, d) {
+  let t = Infinity;
+  if (d.y < -1e-4) t = Math.min(t, -p.y / d.y); if (d.y > 1e-4) t = Math.min(t, (H - p.y) / d.y);
+  if (d.z > 1e-4) t = Math.min(t, (D - p.z) / d.z); if (d.x < -1e-4) t = Math.min(t, -p.x / d.x); if (d.x > 1e-4) t = Math.min(t, (W - p.x) / d.x);
+  return p.clone().addScaledVector(d, t);
+}
+const CELL = .25, NX = W / CELL, NZ = D / CELL;
+
+// ================================================================ the data (EnergyPlus timestep, held per step)
+let season = 'summer';
+const FACES = ['Suelo', 'Muro_N', 'Muro_E', 'Muro_S', 'Muro_W', 'Cubierta'];
+const floorCons = SB.constructions[SB.face_construction.Suelo];
+const floorMat = floorCons.layers.map(l => SB.materials[l.material]);
+const CONC_T = floorCons.layers.reduce((s, l) => /hormigon/i.test(l.material) ? s + 96 * l.thickness * SB.materials[l.material].density / 1000 : s, 0);   // t of concrete in the slab
+const N_NODES = SB.summer.nodes.Suelo.x.length;
+function nodeVolumes(x) { return x.map((xi, j) => ((x[j + 1] ?? xi) - (x[j - 1] ?? xi)) / 2); }
+const cache = new Map();
+function row(i) {
+  i = clamp(i, 0, 479); const key = season + i; if (cache.has(key)) return cache.get(key);
+  const Sd = SB[season], z = Sd.zone, si = Sd.site, sf = Sd.surf, w = Sd.win;
+  const g = a => (a && a[i] != null ? a[i] : 0);
+  const r = { i, Tout: g(si.Tout), Tair: g(z.Tair), MRT: g(z.MRT), occ: g(z.occ), DNI: g(si.DNI), DHI: g(si.DHI), alt: g(si.alt), az: g(si.az), wOut: g(si.wOut), wIn: g(z.wIn),
+    Iinc: g(w.incOut), Qtr: g(w.tr), Qbeam: g(w.trBeam), Qdiff: g(w.trDiff), Qabs: g(w.abs), TgIn: g(w.Tin), TgOut: g(w.Tout), gCond: g(w.cond),
+    pplRad: g(z.pplRad), pplConv: g(z.pplConv), pplLat: g(z.pplLat), pplSens: g(z.pplSens),
+    litVis: g(z.litVis), litRad: g(z.litRad), litConv: g(z.litConv), litRet: g(z.litRet), eqRad: g(z.eqRad), eqConv: g(z.eqConv),
+    oaFlow: g(z.oaFlow), Tsup: g(z.Tsup), Tmix: g(z.Tmix), mSup: g(z.mSup),
+    oaSens: g(z.oaSensCool) - g(z.oaSensHeat), oaLat: g(z.oaLatCool) - g(z.oaLatHeat), hrSens: g(z.hrSensCool) - g(z.hrSensHeat), hrLat: g(z.hrLatCool) - g(z.hrLatHeat),
+    infil: g(z.infGain) - g(z.infLoss), infFlow: g(z.infFlow),
+    Tsky: g(si.Tsky), Top: g(z.Top), RH: g(z.RH), loadS: g(z.zSensCool) - g(z.zSensHeat), loadL: g(z.zLatCool) - g(z.zLatHeat),
+    surfConv: g(z.surfConv), intConv: g(z.intConv), oaTransfer: g(z.oaTransfer), sysConv: g(z.sysConv), airStore: g(z.airStore), S: {} };
+  r.Qinc = r.Iinc * AG; r.Qref = Math.max(0, r.Qinc - r.Qtr - r.Qabs);
+  for (const f of FACES) r.S[f] = { T: sf.Tin[f][i], sol: sf.solIn[f][i], ir: sf.intRad[f][i], lw: sf.lw[f][i], conv: sf.conv[f][i], cond: sf.cond[f][i] };
+  r.S.Glass = { T: r.TgIn, sol: 0, ir: 0, lw: g(w.lw), conv: g(w.conv), cond: 0 };
+  // CondFD nodes of the floor slab: x from the ground side; storage Σ ρ·c·Δx·dT/dt
+  const N = Sd.nodes.Suelo, dx = nodeVolumes(N.x);
+  r.fx = N.x; r.fT = N.T.map(a => a[i]); const prev = N.T.map(a => a[Math.max(0, i - 1)]);
+  r.Qst = i > 0 ? 96 * N.x.reduce((s, _, j) => { const m = floorMat[N.layer[j]]; return s + m.density * m.specific_heat * dx[j] * (r.fT[j] - prev[j]) / (Sd.step_min * 60); }, 0) : 0;
+  const top = r.fT.length - 1, mTop = floorMat[N.layer[top]];
+  r.kTop = mTop.conductivity; r.dxTop = N.x[top] - N.x[top - 1]; r.qTop = -mTop.conductivity * (r.fT[top] - r.fT[top - 1]) / r.dxTop;  // + = upwards (out of slab)
+  cache.set(key, r); return r;
+}
+function sunVec(r) { const a = r.alt * Math.PI / 180, z = r.az * Math.PI / 180; return V(Math.sin(z) * Math.cos(a), Math.sin(a), Math.cos(z) * Math.cos(a)); }
+
+// ================================================================ renderer, scene, room
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+const scene = new THREE.Scene(); scene.background = PAPER.clone();
+const camera = new THREE.PerspectiveCamera(32, 1, .1, 200); camera.position.set(18, 10, 17);
+const controls = new OrbitControls(camera, canvas); controls.target.set(6, 1.2, 4); controls.enableDamping = true; controls.dampingFactor = .08;
+const hemi = new THREE.HemisphereLight(0xffffff, 0xe6e1d8, 2.2); scene.add(hemi);
+const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+sunLight.castShadow = true; sunLight.shadow.mapSize.set(2048, 2048);
+Object.assign(sunLight.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 70 });
+sunLight.shadow.radius = 4; sunLight.shadow.bias = -.0004; sunLight.target.position.set(W / 2, 0, D / 2); scene.add(sunLight, sunLight.target);
+const EDGE = new THREE.LineBasicMaterial({ color: 0x2a2a2a });
+function box(x0, x1, y0, y1, z0, z1, mat, edges = true) {
+  const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), m = new THREE.Mesh(g, mat);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
+  if (edges) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), EDGE); m.add(e); m.userData.edges = e; }
+  return m;
+}
+const walls = [];
+function wallGroup(key, normal, center) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xf1efea, transparent: true });
+  const g = new THREE.Group(); scene.add(g);
+  const wg = { key, g, mat, normal, center, meshes: [], hidden: false, fade: 1 }; walls.push(wg); return wg;
+}
+const south = wallGroup('Muro_S', V(0, 0, -1), V(W / 2, H / 2, 0)), north = wallGroup('Muro_N', V(0, 0, 1), V(W / 2, H / 2, D));
+const west = wallGroup('Muro_W', V(-1, 0, 0), V(0, H / 2, D / 2)), east = wallGroup('Muro_E', V(1, 0, 0), V(W, H / 2, D / 2));
+const add = (wg, m) => { wg.g.add(m); wg.meshes.push(m); };
+add(south, box(-T, W + T, 0, WIN.y0, -T, 0, south.mat)); add(south, box(-T, W + T, WIN.y1, H, -T, 0, south.mat));
+add(south, box(-T, WIN.x0, WIN.y0, WIN.y1, -T, 0, south.mat)); add(south, box(WIN.x1, W + T, WIN.y0, WIN.y1, -T, 0, south.mat));
+add(north, box(-T, W + T, 0, H, D, D + T, north.mat)); add(west, box(-T, 0, 0, H, 0, D, west.mat)); add(east, box(W, W + T, 0, H, 0, D, east.mat));
+scene.add(box(-T, W + T, H, H + .092, -T, D + T, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), false));   // roof: casts the shadow only
+const ceilMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35, depthWrite: false, side: THREE.DoubleSide });
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(W, D), ceilMat); ceiling.rotation.x = Math.PI / 2; ceiling.position.set(W / 2, H - .005, D / 2); ceiling.visible = false; scene.add(ceiling);
+const ceilEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(W, D)), new THREE.LineBasicMaterial({ color: 0x9a9a9a, transparent: true, opacity: .6 }));
+ceilEdge.rotation.x = Math.PI / 2; ceilEdge.position.copy(ceiling.position); ceilEdge.visible = false; scene.add(ceilEdge);
+const glassMat = new THREE.MeshBasicMaterial({ color: 0xcfe0f0, transparent: true, opacity: .5, depthWrite: false, side: THREE.DoubleSide });
+const glass = new THREE.Mesh(new THREE.PlaneGeometry(WIN.x1 - WIN.x0, WIN.y1 - WIN.y0), glassMat);
+glass.position.set((WIN.x0 + WIN.x1) / 2, (WIN.y0 + WIN.y1) / 2, -T / 2); scene.add(glass);
+const mullMat = new THREE.MeshLambertMaterial({ color: 0x8f8f8f });
+for (let x = WIN.x0 + 1.5; x < WIN.x1 - .1; x += 1.5) scene.add(box(x - .03, x + .03, WIN.y0, WIN.y1, -T / 2 - .03, -T / 2 + .03, mullMat));
+
+const floorGeo = new THREE.BufferGeometry();
+const fPos = new Float32Array(NX * NZ * 18), fCol = new Float32Array(NX * NZ * 18);
+for (let i = 0, k = 0; i < NX; i++) for (let j = 0; j < NZ; j++) {
+  const x0 = i * CELL, x1 = x0 + CELL, z0 = j * CELL, z1 = z0 + CELL;
+  for (const [x, z] of [[x0, z0], [x0, z1], [x1, z1], [x0, z0], [x1, z1], [x1, z0]]) { fPos[k++] = x; fPos[k++] = 0; fPos[k++] = z; }
+}
+floorGeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3)); floorGeo.setAttribute('color', new THREE.BufferAttribute(fCol, 3)); floorGeo.computeVertexNormals();
+const floorMesh = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ vertexColors: true })); floorMesh.receiveShadow = true; scene.add(floorMesh);
+const cellT = new Float32Array(NX * NZ).fill(25);
+const SLAB = floorCons.thickness;                       // real build-up, 0.243 m
+const slabCanvas = document.createElement('canvas'); slabCanvas.width = 4; slabCanvas.height = 128;
+const slabTex = new THREE.CanvasTexture(slabCanvas);
+const slab = box(-T, W + T, -SLAB, -.002, -T, D + T, new THREE.MeshLambertMaterial({ map: slabTex })); slab.castShadow = false; scene.add(slab);
+const LBG = ['#4b6ba9', '#7393ca', '#aac8f7', '#c1d5d0', '#f5ef67', '#fce64a', '#ef9c15', '#ea7b00', '#ea4a00', '#ea2600'].map(c => new THREE.Color(c));
+function lbg(u, out = new THREE.Color()) { u = clamp(u) * (LBG.length - 1); const j = Math.min(LBG.length - 2, Math.floor(u)); return out.copy(LBG[j]).lerp(LBG[j + 1], u - j); }
+function paintSlab(r) {   // CondFD node temperatures through the real layers (top = inside face), on the cut's own stretched scale
+  const c = slabCanvas.getContext('2d'), col = new THREE.Color(), x = r.fx, Tn = r.fT, tot = x[x.length - 1];
+  const lo = Math.min(...Tn), hi = Math.max(...Tn, lo + 1); r.cutLo = lo; r.cutHi = hi;
+  if (!slabFocus) { c.fillStyle = '#e6e3dd'; c.fillRect(0, 0, 4, 128); let a2 = 0; c.fillStyle = 'rgba(0,0,0,.25)'; for (const l of [...floorCons.layers].reverse()) { a2 += l.thickness; c.fillRect(0, Math.round(a2 / tot * 127), 4, 1); } slabTex.needsUpdate = true; return; }
+  for (let y = 0; y < 128; y++) {
+    const xd = tot * (1 - y / 127); let j = 0; while (j < x.length - 2 && x[j + 1] < xd) j++;
+    const u = clamp((xd - x[j]) / (x[j + 1] - x[j])), Tz = Tn[j] + (Tn[j + 1] - Tn[j]) * u;
+    lbg((Tz - lo) / (hi - lo), col); c.fillStyle = `#${col.getHexString()}`; c.fillRect(0, y, 4, 1);
+  }
+  let acc = 0; c.fillStyle = 'rgba(0,0,0,.35)';
+  for (const l of [...floorCons.layers].reverse()) { acc += l.thickness; c.fillRect(0, Math.round(acc / tot * 127), 4, 1); }   // layer joints
+  slabTex.needsUpdate = true;
+}
+
+const bodyMat = new THREE.MeshLambertMaterial({ color: 0xb9b6b0 });
+const people = [];
+for (let i = 0; i < 12; i++) {
+  const p = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(.17, .2, 1.25, 20), bodyMat); b.position.y = .62;
+  const hd = new THREE.Mesh(new THREE.SphereGeometry(.13, 18, 12), bodyMat); hd.position.y = 1.42;
+  b.castShadow = hd.castShadow = true; p.add(b, hd);
+  p.position.set(2.6 + (i % 4) * 2.2 + (Math.floor(i / 4) % 2) * 1.0, 0, 4.0 + Math.floor(i / 4) * 1.3); scene.add(p); people.push(p);
+}
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xf6f3e8 });
+const fixtures = [];
+for (let i = 0; i < 6; i++) { const m = box(0, 1.4, 0, .05, 0, .22, lampMat); m.castShadow = false; m.position.set(2.5 + (i % 3) * 3.5, 3.6, 2.6 + Math.floor(i / 3) * 3); scene.add(m); fixtures.push(m); }
+const eqMat = new THREE.MeshLambertMaterial({ color: 0xb9b6b0 });
+const equipment = [];
+for (const z of [5.2, 6.6]) { const m = box(0, .6, 0, 1.1, 0, .9, eqMat); m.position.set(.8, .55, z); scene.add(m); equipment.push(m); }
+const inlet = box(-.02, .02, 3.0, 3.4, 3, 5, new THREE.MeshBasicMaterial({ color: 0x555555 })); inlet.position.x = .02; scene.add(inlet);
+const diffuser = box(0, .7, 0, .04, 0, .7, new THREE.MeshBasicMaterial({ color: 0xffffff })); diffuser.castShadow = false; diffuser.position.set(6, 3.85, 4.4); scene.add(diffuser);
+
+// ================================================================ line layers with per-vertex alpha
+const lineMats = [];
+const bg = PAPER.clone();
+class Layer {
+  constructor(width = 1.6, maxSeg = 9000) {
+    this.maxSeg = maxSeg; this.geo = new LineSegmentsGeometry();
+    this.geo.setPositions(new Float32Array(maxSeg * 6)); this.geo.setColors(new Float32Array(maxSeg * 6));
+    this.pBuf = this.geo.attributes.instanceStart.data; this.cBuf = this.geo.attributes.instanceColorStart.data;
+    this.aBuf = new THREE.InstancedInterleavedBuffer(new Float32Array(maxSeg * 2), 2, 1);
+    for (const b of [this.pBuf, this.cBuf, this.aBuf]) b.setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('instanceAlphaStart', new THREE.InterleavedBufferAttribute(this.aBuf, 1, 0));
+    this.geo.setAttribute('instanceAlphaEnd', new THREE.InterleavedBufferAttribute(this.aBuf, 1, 1));
+    this.geo.boundingSphere = new THREE.Sphere(V(W / 2, H / 2, D / 2), 40);
+    this.mat = new LineMaterial({ linewidth: width, vertexColors: true, transparent: true, depthWrite: false });
+    this.mat.onBeforeCompile = sh => {
+      sh.vertexShader = 'attribute float instanceAlphaStart;\nattribute float instanceAlphaEnd;\nvarying float vAlpha;\n' +
+        sh.vertexShader.replace('void main() {', 'void main() {\n\tvAlpha = ( position.y < 0.5 ) ? instanceAlphaStart : instanceAlphaEnd;');
+      sh.fragmentShader = 'varying float vAlpha;\n' + sh.fragmentShader.replace(/gl_FragColor\s*=\s*vec4\(\s*diffuseColor\.rgb,\s*alpha\s*\);/, 'gl_FragColor = vec4( diffuseColor.rgb, alpha * min( 1.0, pow( vAlpha, 0.55 ) * 1.12 ) );');
+    };
+    this.mat.customProgramCacheKey = () => 'tl-alpha-line';
+    lineMats.push(this.mat);
+    this.obj = new LineSegments2(this.geo, this.mat); this.obj.frustumCulled = false; this.obj.renderOrder = 5; scene.add(this.obj);
+    this.n = 0; this.P = this.pBuf.array; this.C = this.cBuf.array; this.A = this.aBuf.array;
+  }
+  begin() { this.n = 0; }
+  seg(a, b, fa, fb, ca, cb = ca) {   // written straight into the GPU buffers: no per-frame arrays
+    if (this.n >= this.maxSeg) return;
+    const k = this.n * 6, P = this.P, C = this.C;
+    P[k] = a.x; P[k + 1] = a.y; P[k + 2] = a.z; P[k + 3] = b.x; P[k + 4] = b.y; P[k + 5] = b.z;
+    C[k] = ca.r; C[k + 1] = ca.g; C[k + 2] = ca.b; C[k + 3] = cb.r; C[k + 4] = cb.g; C[k + 5] = cb.b;
+    this.A[this.n * 2] = fa; this.A[this.n * 2 + 1] = fb; this.n++;
+    if (this.casing) this.casing.seg(a, b, fa * .55, fb * .55, WHITE);
+  }
+  end() {   // upload only the used part of each buffer
+    const n = this.n; this.obj.visible = n > 0; this.geo.instanceCount = n; if (!n) return;
+    for (const [b, w] of [[this.pBuf, 6], [this.cBuf, 6], [this.aBuf, 2]]) { b.clearUpdateRanges(); b.addUpdateRange(0, n * w); b.needsUpdate = true; }
+  }
+}
+const ringTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.strokeStyle = '#fff'; g.lineWidth = 7; g.beginPath(); g.arc(32, 32, 22, 0, Math.PI * 2); g.stroke(); return new THREE.CanvasTexture(c); })();
+class Dots {
+  constructor(cap = 500) {
+    this.cap = cap; this.geo = new THREE.BufferGeometry(); this.pos = new Float32Array(cap * 3); this.col = new Float32Array(cap * 4);
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 4));
+    this.obj = new THREE.Points(this.geo, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, map: ringTex, transparent: true, depthWrite: false, vertexColors: true }));
+    this.obj.frustumCulled = false; this.obj.renderOrder = 6; scene.add(this.obj); this.n = 0;
+  }
+  begin() { this.n = 0; }
+  dot(p, f, c) { if (this.n >= this.cap) return; this.pos.set([p.x, p.y, p.z], this.n * 3); this.col.set([c.r, c.g, c.b, f], this.n * 4); this.n++; }
+  end() { this.geo.setDrawRange(0, this.n); this.geo.attributes.position.needsUpdate = this.geo.attributes.color.needsUpdate = true; }
+}
+const WHITE = new THREE.Color('#ffffff');
+const casing = new Layer(4.8, 14000); casing.obj.renderOrder = 4;
+const thick = new Layer(2.8), thin = new Layer(1.6), ink = new Layer(1.6), dots = new Dots();
+thick.casing = casing;
+const guide = new Layer(1.0, 3000);   // sun path, compass
+const hl = new Layer(4.2, 2000); hl.obj.renderOrder = 7;   // steady outline of the element in focus
+const cutInk = new Layer(3.4, 1500);   // arrows on the slab cut: no white casing, so the deep red reads on the orange
+const LAYERS = [casing, thick, thin, ink, guide, hl, cutInk, dots];
+const HL = new THREE.Color('#1f6fe0');
+const RECTS = {
+  Suelo: [V(0, .03, 0), V(W, .03, 0), V(W, .03, D), V(0, .03, D)], Cubierta: [V(0, H - .03, 0), V(W, H - .03, 0), V(W, H - .03, D), V(0, H - .03, D)],
+  Muro_N: [V(0, 0, D - .03), V(W, 0, D - .03), V(W, H, D - .03), V(0, H, D - .03)], Muro_S: [V(0, 0, .03), V(W, 0, .03), V(W, H, .03), V(0, H, .03)],
+  Muro_E: [V(W - .03, 0, 0), V(W - .03, 0, D), V(W - .03, H, D), V(W - .03, H, 0)], Muro_W: [V(.03, 0, 0), V(.03, 0, D), V(.03, H, D), V(.03, H, 0)],
+  Glass: [V(WIN.x0, WIN.y0, .03), V(WIN.x1, WIN.y0, .03), V(WIN.x1, WIN.y1, .03), V(WIN.x0, WIN.y1, .03)],
+};
+function boxOutline(c, sx, sy, sz, a) {   // the 12 edges of a box
+  const xs = [c.x - sx, c.x + sx], ys = [c.y - sy, c.y + sy], zs = [c.z - sz, c.z + sz], P = (i, j, k) => V(xs[i], ys[j], zs[k]);
+  for (const [a1, b1] of [[[0,0,0],[1,0,0]],[[0,1,0],[1,1,0]],[[0,0,1],[1,0,1]],[[0,1,1],[1,1,1]],[[0,0,0],[0,1,0]],[[1,0,0],[1,1,0]],[[0,0,1],[0,1,1]],[[1,0,1],[1,1,1]],[[0,0,0],[0,0,1]],[[1,0,0],[1,0,1]],[[0,1,0],[0,1,1]],[[1,1,0],[1,1,1]]])
+    hl.seg(P(...a1), P(...b1), a, a, HL);
+}
+function drawHighlights(step, FOC) {
+  const a = .85;   // steady outline, no pulsing
+  let keys = step.k ? [step.k] : [...FOC].filter(k => RECTS[k]);
+  if (!step.k && keys.length > 3) keys = [];                        // a whole-room exchange: no single element to point at
+  for (const k of keys) {
+    if (SURF[k] && !SURF[k].vis() && k !== 'Glass' && k !== 'Suelo') continue;
+    const c = RECTS[k], ctr = c.reduce((m, q) => m.add(q), V(0, 0, 0)).multiplyScalar(.25), ins = c.map(q => q.clone().lerp(ctr, .025));   // set just inside the edges
+    for (let j = 0; j < 4; j++) hl.seg(ins[j], ins[(j + 1) % 4], a, a, HL);
+  }
+  const g = step.g;
+  if (g === 'People' || (!step.k && FOC.has('people') && keys.length === 0 && step.proc.every(e => !['intRadOn'].includes(Array.isArray(e) ? e[0] : e))))
+    for (let i = 0; i < nFig(); i++) { const pz = people[i].position; let prev = null; for (let t = 0; t <= 24; t++) { const th = t / 24 * Math.PI * 2, q = V(pz.x + .32 * Math.cos(th), .03, pz.z + .32 * Math.sin(th)); if (prev) hl.seg(prev, q, a, a, HL); prev = q; } }
+  if (g === 'Lights' || (!step.k && FOC.has('lamps') && keys.length === 0)) fixtures.forEach(f => boxOutline(f.position, .75, .06, .14, a));
+  if (g === 'Equipment' || (!step.k && FOC.has('equip') && keys.length === 0)) equipment.forEach(e => boxOutline(e.position, .34, .59, .49, a));
+}
+
+// ================================================================ glyphs
+let CLK = 0;
+function polyLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += pts[i].distanceTo(pts[i - 1]); return L; }
+function pointAt(pts, d) { for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); if (d <= l) return pts[i - 1].clone().lerp(pts[i], d / l); d -= l; } return pts[pts.length - 1].clone(); }
+function pulses(L, pts, col, a, len, sp, v, g0 = 0) {
+  const tot = polyLen(pts);
+  for (let d = frac((CLK * v - g0) / sp) * sp; d < tot + len; d += sp) {
+    const d0 = Math.max(0, d - len), d1 = Math.min(tot, d); if (d1 <= d0) continue;
+    const f = a * (1 - smooth(tot - .25, tot + len, d)) * smooth(0, .25, d);
+    let prev = pointAt(pts, d0), pf = .15 * f;
+    for (let i = 1; i <= 3; i++) { const q = pointAt(pts, d0 + (d1 - d0) * i / 3); const fi = f * (.15 + .85 * i / 3); L.seg(prev, q, pf, fi, col); prev = q; pf = fi; }
+  }
+}
+function lwTrain(L, a, b, alpha, phase, col = MARK.lw, sp = 1.5, v = 1.5) {
+  const dir = b.clone().sub(a), len = dir.length(); if (len < .2) return; dir.normalize();
+  const perp = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > .9 ? V(1, 0, 0) : V(0, 1, 0)).normalize();
+  for (let d = frac((CLK * v + phase) / sp) * sp; d < len + .7; d += sp) {
+    let prev = null, pf = 0;
+    for (let i = 0; i <= 10; i++) {
+      const s = d - .7 + .07 * i; if (s < 0 || s > len) { prev = null; continue; }
+      const p = a.clone().addScaledVector(dir, s).addScaledVector(perp, .055 * Math.sin(s / .26 * Math.PI * 2));
+      const f = alpha * (i / 10) * (1 - smooth(len - .25, len, s)) * smooth(0, .2, s);
+      if (prev) L.seg(prev, p, pf, f, col); prev = p; pf = f;
+    }
+  }
+}
+function ring(L, c, r, alpha, col = MARK.lw) {
+  let prev = null;
+  for (let i = 0; i <= 40; i++) { const th = i / 40 * Math.PI * 2, rr = r * (1 + .025 * Math.sin(th * 9 + CLK * 3)); const p = V(c.x + rr * Math.cos(th), c.y, c.z + rr * Math.sin(th)); if (prev) L.seg(prev, p, alpha, alpha, col); prev = p; }
+}
+function plume(L, base, h, alpha, col, phase, dir = 1, v = .45, sp = .9) {
+  const pts = []; for (let i = 0; i <= 12; i++) { const y = h * i / 12; pts.push(base.clone().add(V(.1 * Math.sin(2.1 * y + phase), dir * y, .08 * Math.cos(1.6 * y + phase)))); }
+  pulses(L, pts, col, alpha, .45, sp, v, phase);
+}
+function bez(P, u) { const a = 1 - u; return P[0].clone().multiplyScalar(a * a * a).addScaledVector(P[1], 3 * a * a * u).addScaledVector(P[2], 3 * a * u * u).addScaledVector(P[3], u * u * u); }
+const bezPts = (P, n = 24) => Array.from({ length: n + 1 }, (_, i) => bez(P, i / n));
+
+// ================================================================ data → glyphs: one scale per mark, shown in the legend
+const SCALE = { lw: 50, conv: 70, cond: 70, figure: 4 };   // W per train / plume / arrow, people per figure
+const S = { sv: V(0, 1, 0), up: false, r: null };
+let LIT = [];
+const litCells = () => { const out = []; if (!S.up) return out; for (let i = 0; i < NX; i++) for (let j = 0; j < NZ; j++) { const x = (i + .5) * CELL, z = (j + .5) * CELL; if (sunlitXZ(x, .02, z, S.sv, S.up)) out.push(V(x, .02, z)); } return out; };
+// rays: a jittered grid over the glass, each with its own phase and a slightly different speed (no lock-step waves)
+const hash = i => frac(Math.sin(i * 127.1 + 311.7) * 43758.5453);
+const RAYS = []; { let k = 0; for (let x = WIN.x0 + .25; x < WIN.x1; x += .5) for (let y = WIN.y0 + .25; y < WIN.y1; y += .5, k++) RAYS.push({ w: V(x + (hash(k) - .5) * .35, y + (hash(k + 99) - .5) * .35, -T / 2), ph: hash(k + 7) * 10, v: 2.0 + hash(k + 3) * 1.1 }); }
+function sunRay(ray, r, mode) {   // mode: 'in' | 'refl' | 'abs'
+  const dir = S.sv.clone().negate(), o = ray.w.clone().addScaledVector(S.sv, 5), a = clamp(r.DNI / 700, .55, 1) * (.8 + .2 * hash(ray.ph));
+  const sp = clamp(26000 / (r.Qinc + 1), 1.2, 8);
+  let pts;
+  if (mode === 'refl') pts = [o, ray.w, ray.w.clone().addScaledVector(V(dir.x, dir.y, -dir.z), 3)];
+  else if (mode === 'abs') pts = [o, ray.w];
+  else pts = [o, ray.w, hitRoom(ray.w, dir)];
+  thin.seg(pts[0], pts[1], .1, .16, MARK.sun); if (pts[2]) thin.seg(pts[1], pts[2], .16, mode === 'refl' ? .03 : .22, MARK.sun);
+  pulses(thick, pts, MARK.sun, a, .75, sp, ray.v, ray.ph);
+}
+const head = i => { const p = people[i].position; return V(p.x, 1.42, p.z); };
+const nFig = () => Math.min(people.length, Math.round(S.r.occ / SCALE.figure));
+const wallOf = k => ({ Muro_N: north, Muro_S: south, Muro_E: east, Muro_W: west })[k];
+// surface sampling: deterministic points on each surface (floor prefers the sunlit patch when it is the hot part)
+const SURF = {
+  Suelo: { pt: k => (LIT.length && k % 3 !== 2) ? LIT[(k * 53) % LIT.length].clone() : V(.4 + frac(k * .618) * (W - .8), .02, .4 + frac(k * .382 + .13) * (D - .8)), n: V(0, 1, 0), vis: () => true },
+  Muro_N: { pt: k => V(.4 + frac(k * .618) * (W - .8), .3 + frac(k * .382) * (H - .6), D - .02), n: V(0, 0, -1), vis: () => !north.hidden },
+  Muro_E: { pt: k => V(W - .02, .3 + frac(k * .382) * (H - .6), .4 + frac(k * .618) * (D - .8)), n: V(-1, 0, 0), vis: () => !east.hidden },
+  Muro_W: { pt: k => V(.02, .3 + frac(k * .382) * (H - .6), .4 + frac(k * .618) * (D - .8)), n: V(1, 0, 0), vis: () => !west.hidden },
+  Muro_S: { pt: k => k % 2 ? V(.3 + frac(k * .618) * (W - .6), .1 + frac(k * .382) * .35, .02) : V(.1 + frac(k * .618) * 1.2 + (k % 4 ? 0 : 9.1), .6 + frac(k * .382) * 2.8, .02), n: V(0, 0, 1), vis: () => !south.hidden },
+  Cubierta: { pt: k => V(.4 + frac(k * .618) * (W - .8), H - .02, .4 + frac(k * .382 + .2) * (D - .8)), n: V(0, -1, 0), vis: () => true },
+  Glass: { pt: k => V(WIN.x0 + .25 + frac(k * .618) * (WIN.x1 - WIN.x0 - .5), WIN.y0 + .25 + frac(k * .382) * (WIN.y1 - WIN.y0 - .5), .02), n: V(0, 0, 1), vis: () => true },
+};
+const SURFKEYS = Object.keys(SURF);
+
+// Ladybug-style sun path: the day's arc from the EnergyPlus solar angles, a compass rose and the sun itself
+const SP_C = V(W / 2, 0, D / 2), SP_R = 14;
+const sunBall = new THREE.Mesh(new THREE.SphereGeometry(.45, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffb000 }));
+sunBall.visible = false; scene.add(sunBall);
+const GUIDE = new THREE.Color('#6b6b6b');
+function sunAt(i) { const r = row(i); return { up: r.alt > 0, p: SP_C.clone().addScaledVector(sunVec(r), SP_R), h: i / 20 }; }
+// ---------------------------------------------------------------- diffuse light: a volume leaving the glazing + view-factor shading
+const DIFF = { on: false, surf: new Set(), vol: 0, op: {} };
+const softTex = (() => {          // rectangle with soft edges, used by the light volume
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), img = g.createImageData(128, 128);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const ex = Math.min(x, 127 - x) / 30, ey = Math.min(y, 127 - y) / 30, a = Math.min(1, ex) * Math.min(1, ey);
+    const v = Math.round(255 * a * a * (3 - 2 * a)); const k = (y * 128 + x) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = v; img.data[k + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); return new THREE.CanvasTexture(c);
+})();
+const DIFF_COL = new THREE.Color('#ffb81c');
+const volPlanes = [];
+for (let i = 0; i < 9; i++) {
+  const d = .12 + i * .42, grow = d * .55;   // each slice further in and wider: light spreading out of the opening
+  const x0 = Math.max(.02, WIN.x0 - grow), x1 = Math.min(W - .02, WIN.x1 + grow), y0 = Math.max(.02, WIN.y0 - grow * .9), y1 = Math.min(H - .02, WIN.y1 + grow * .5);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshBasicMaterial({ color: DIFF_COL, alphaMap: softTex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, d); m.renderOrder = 3; m.visible = false; scene.add(m); volPlanes.push({ m, w: Math.pow(1 - i / 9, 1.6) });
+}
+// view factor from a point on a surface to the glazing (sampled 9×3), the pattern of diffuse light each surface receives
+function vfToGlass(p, n) {
+  let s = 0; const dA = (WIN.x1 - WIN.x0) * (WIN.y1 - WIN.y0) / 27;
+  for (let a = 0; a < 9; a++) for (let b = 0; b < 3; b++) {
+    const w = V(WIN.x0 + (a + .5) * (WIN.x1 - WIN.x0) / 9, WIN.y0 + (b + .5) * (WIN.y1 - WIN.y0) / 3, 0), d = w.clone().sub(p), r2 = d.lengthSq(); d.normalize();
+    s += Math.max(0, d.dot(n)) * Math.max(0, -d.z) * dA / (Math.PI * r2);
+  }
+  return s;
+}
+function vfOverlay(key, size, place, toWorld, n) {
+  const NX_ = 96, NY_ = 48, c = document.createElement('canvas'); c.width = NX_; c.height = NY_; const g = c.getContext('2d'), img = g.createImageData(NX_, NY_);
+  const vals = []; let mx = 0, mn = Infinity;
+  for (let j = 0; j < NY_; j++) for (let i = 0; i < NX_; i++) { const v = vfToGlass(toWorld((i + .5) / NX_, 1 - (j + .5) / NY_), n); vals.push(v); mx = Math.max(mx, v); mn = Math.min(mn, v); }
+  vals.forEach((v, k) => { const a = (.08 + .92 * Math.pow((v - mn) / (mx - mn || 1), 1.4)) * 255; img.data[k * 4] = img.data[k * 4 + 1] = img.data[k * 4 + 2] = a; img.data[k * 4 + 3] = 255; });
+  g.putImageData(img, 0, 0);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]), new THREE.MeshBasicMaterial({ color: DIFF_COL, alphaMap: new THREE.CanvasTexture(c), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  place(m); m.renderOrder = 2; m.visible = false; scene.add(m); return { key, m };
+}
+const OVERLAYS = [
+  vfOverlay('Suelo', [W, D], m => { m.rotation.x = -Math.PI / 2; m.position.set(W / 2, .008, D / 2); }, (u, v) => V(u * W, 0, (1 - v) * D), V(0, 1, 0)),
+  vfOverlay('Muro_N', [W, H], m => { m.rotation.y = Math.PI; m.position.set(W / 2, H / 2, D - .008); }, (u, v) => V((1 - u) * W, v * H, D), V(0, 0, -1)),
+  vfOverlay('Muro_W', [D, H], m => { m.rotation.y = Math.PI / 2; m.position.set(.008, H / 2, D / 2); }, (u, v) => V(0, v * H, (1 - u) * D), V(1, 0, 0)),
+  vfOverlay('Muro_E', [D, H], m => { m.rotation.y = -Math.PI / 2; m.position.set(W - .008, H / 2, D / 2); }, (u, v) => V(W, v * H, u * D), V(-1, 0, 0)),
+  vfOverlay('Cubierta', [W, D], m => { m.rotation.x = Math.PI / 2; m.position.set(W / 2, H - .008, D / 2); }, (u, v) => V(u * W, H, v * D), V(0, -1, 0)),
+];
+const solMax = {};   // per season and surface, for the shading strength
+function updateDiffuse(r, dt) {
+  const key = season; if (!solMax[key]) { solMax[key] = {}; for (const o of OVERLAYS) { let m = 1; for (let i = 0; i < 480; i += 4) m = Math.max(m, row(i).S[o.key].sol); solMax[key][o.key] = m; } }
+  const ease = 1 - Math.exp(-dt / .35);
+  const volT = DIFF.on ? clamp(r.Qdiff / 1800) * .16 : 0;
+  DIFF.vol += (volT - DIFF.vol) * ease;
+  const vd = camera.getWorldDirection(new THREE.Vector3()), side = Math.pow(1 - Math.abs(vd.z), 1.3);   // slices fade when seen head-on
+  for (const p of volPlanes) { p.m.visible = DIFF.vol > .002; p.m.material.opacity = DIFF.vol * p.w * (.15 + .85 * side); }
+  for (const o of OVERLAYS) {
+    const show = DIFF.surf.has(o.key) && SURF[o.key].vis(), tgt = show ? .55 * Math.pow(clamp(r.S[o.key].sol / solMax[key][o.key]), .8) : 0;
+    DIFF.op[o.key] = (DIFF.op[o.key] || 0) + (tgt - (DIFF.op[o.key] || 0)) * ease;
+    o.m.visible = DIFF.op[o.key] > .004; o.m.material.opacity = DIFF.op[o.key];
+  }
+}
+
+const PROC_GUIDE = {
+  sunPath() {
+    let prev = null;
+    for (let i = 0; i < 480; i += 2) { const s = sunAt(i); if (s.up && prev) guide.seg(prev, s.p, .8, .8, MARK.sun); prev = s.up ? s.p : null; }
+    for (let h = 2; h < 24; h += 2) { const s = sunAt(h * 20); if (s.up) { guide.seg(s.p.clone().addScaledVector(V(0, 1, 0), -.25), s.p.clone().addScaledVector(V(0, 1, 0), .25), .9, .9, GUIDE); label(s.p.clone().add(V(0, .45, 0)), `${h}:00`); } }
+    let p0 = null; for (let k = 0; k <= 72; k++) { const a = k / 72 * Math.PI * 2, p = V(SP_C.x + SP_R * Math.sin(a), .01, SP_C.z + SP_R * Math.cos(a)); if (p0) guide.seg(p0, p, .55, .55, GUIDE); p0 = p;
+      if (k % 6 === 0) guide.seg(p, V(SP_C.x + (SP_R - (k % 18 ? .4 : .9)) * Math.sin(a), .01, SP_C.z + (SP_R - (k % 18 ? .4 : .9)) * Math.cos(a)), .8, .8, GUIDE); }
+    [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([n, d]) => { const a = d * Math.PI / 180; label(V(SP_C.x + (SP_R + .9) * Math.sin(a), .02, SP_C.z + (SP_R + .9) * Math.cos(a)), `<b>${n}</b>`); });
+    if (S.up) { sunBall.visible = true; sunBall.position.copy(SP_C).addScaledVector(S.sv, SP_R); guide.seg(sunBall.position, SP_C.clone().setY(2), .5, .2, MARK.sun);
+      label(sunBall.position.clone().add(V(.7, 0, 0)), `altitude <b>${f1(S.r.alt)}°</b> · azimuth <b>${f0(S.r.az)}°</b>`); }
+  },
+};
+// point on surface k that faces p (perpendicular foot, kept inside the surface; a sensible height when the surfaces are at right angles)
+function facePoint(k, p) {
+  const cx = x => clamp(x, .3, W - .3), cz = z => clamp(z, .3, D - .3), cy = y => clamp(y, .35, H - .35);
+  switch (k) {
+    case 'Suelo': return V(cx(p.x), .02, cz(p.z + (p.y > 2 ? 0 : .6)));
+    case 'Cubierta': return V(cx(p.x), H - .02, cz(p.z));
+    case 'Muro_N': return V(cx(p.x), cy(p.y < .1 ? .5 + (D - p.z) * .25 : p.y), D - .02);
+    case 'Muro_W': return V(.02, cy(p.y < .1 ? .5 + p.x * .25 : p.y), cz(p.z));
+    case 'Muro_E': return V(W - .02, cy(p.y < .1 ? .5 + (W - p.x) * .25 : p.y), cz(p.z));
+    case 'Muro_S': return V(clamp(p.x, .3, W - .3), clamp(p.y < .1 ? .3 : p.y, .1, .45), .02);
+    default: return V(clamp(p.x, WIN.x0 + .2, WIN.x1 - .2), clamp(p.y < .1 ? 1 + p.z * .2 : p.y, WIN.y0 + .2, WIN.y1 - .2), .02);
+  }
+}
+function landing(q, k, rad, al) {   // small ring in the plane of the surface where the radiation lands
+  const n = (SURF[k] || SURF.Glass).n, u = new THREE.Vector3().crossVectors(n, Math.abs(n.y) > .9 ? V(1, 0, 0) : V(0, 1, 0)).normalize(), v = new THREE.Vector3().crossVectors(n, u);
+  const rr = rad; let prev = null;
+  for (let i = 0; i <= 28; i++) { const t = i / 28 * Math.PI * 2, pt = q.clone().addScaledVector(u, Math.cos(t) * rr).addScaledVector(v, Math.sin(t) * rr).addScaledVector(n, .01); if (prev) thin.seg(prev, pt, al * .8, al * .8, MARK.lw); prev = pt; }
+}
+const PROC = {
+  sunIn() { if (!S.up) return; for (const ray of RAYS) sunRay(ray, S.r, 'in'); },
+  glassSplit() {   // the share of rays that bounce, stop and pass equals this step's ρ, α, τ
+    if (!S.up || S.r.Qinc < 1) return; const r = S.r, rho = r.Qref / r.Qinc, alpha = r.Qabs / r.Qinc;
+    RAYS.forEach((ray, i) => { const u = frac(i * .618 + .05); sunRay(ray, r, u < rho ? 'refl' : u < rho + alpha ? 'abs' : 'in'); });
+  },
+  sunPatch() {     // the transmitted beam, traced into the room
+    if (!S.up) return; for (const ray of RAYS) sunRay(ray, S.r, 'in');
+  },
+  diffuse() {      // transmitted diffuse light: volume out of the glazing, shading on every surface it reaches
+    DIFF.on = true; ['Suelo', 'Muro_N', 'Muro_W', 'Muro_E'].forEach(k => DIFF.surf.add(k));
+  },
+  floorCond() {    // conduction into (or out of) the slab, from the CondFD gradient
+    const r = S.r, q = r.S.Suelo.cond, n = Math.min(36, Math.round(Math.abs(q) / SCALE.cond)), down = q < 0;
+    for (let k = 0; k < n; k++) { const p = SURF.Suelo.pt(k); const a = p.clone().setY(.55), b = p.clone().setY(.02); pulses(thick, down ? [a, b] : [b, a], MARK.ink, 1, .22, .55, .25, k * .37); }
+    const cutN = Math.min(18, Math.max(3, Math.round(n / 2)));
+    for (let k = 0; k < cutN; k++) { const z = .3 + k * (3.6 / cutN), a = V(W + T + .012, -.01, z), b = V(W + T + .012, -SLAB + .01, z); pulses(cutInk, down ? [a, b] : [b, a], INK_DEEP, 1, .12, .24, .08, z); }
+  },
+  lwNet(only) {    // net long-wave from surfaces losing heat to surfaces gaining it, in proportion to EnergyPlus' net values
+    const r = S.r, em = [], ab = [];
+    for (const k of SURFKEYS) { if (!SURF[k].vis()) continue; const q = r.S[k].lw; if (q < -15) em.push([k, -q]); else if (q > 15) ab.push([k, q]); }
+    const totA = ab.reduce((s, x) => s + x[1], 0); if (!totA) return;
+    for (const [ke, qe] of em) {
+      const n0 = Math.min(30, Math.round(qe / SCALE.lw)), al = clamp(qe / AREA[ke] / 25, .4, 1), n = n0;
+      for (let k = 0; k < n; k++) {
+        let u = frac(k * .618 + .1) * totA, tgt = ab[0][0]; for (const [ka, qa] of ab) { u -= qa; if (u <= 0) { tgt = ka; break; } }
+        if (only && !only.includes(ke) && !only.includes(tgt)) continue;
+        const src = SURF[ke].pt(k * 3 + 2); lwTrain(thick, src, facePoint(tgt, src), al, k * .41, MARK.lw, 1.2, 1.4);
+      }
+    }
+  },
+  sunOn(only) {     // short-wave reaching a wall or the ceiling: the same diffuse volume, shading only that surface
+    DIFF.on = true; DIFF.surf.add(only[0]);
+  },
+  intRadOn(only) {  // radiant share of people, lights and equipment landing on one surface: one tidy bundle per source, straight to the facing point
+    const r = S.r, k = only[0], total = r.S[k].ir; if (total < 5) return;
+    const groups = [];
+    const nF = nFig(); if (nF && r.pplRad > 5) groups.push({ w: r.pplRad, pts: [...Array(nF).keys()].map(i => head(i).add(V(0, -.45, 0))) });
+    if (r.litRad + r.litVis > 5) groups.push({ w: r.litRad + r.litVis, pts: fixtures.map(f => f.position.clone().add(V(0, -.04, 0))) });
+    if (r.eqRad > 5) groups.push({ w: r.eqRad, pts: equipment.map(e => e.position.clone().add(V(.31, .1, 0))) });
+    const wsum = groups.reduce((a, g) => a + g.w, 0);
+    groups.forEach((g, gi) => {
+      const share = total * g.w / wsum;                                   // W this kind of source puts on this surface
+      const per = share / g.pts.length, al = clamp(.35 + per / 40, .35, 1), lanes = clamp(Math.round(per / 12), 1, 3);
+      g.pts.forEach((p, pi) => {
+        const q = facePoint(k, p), dir = q.clone().sub(p); if (dir.length() < .3) return;
+        const side = new THREE.Vector3().crossVectors(dir.clone().normalize(), Math.abs(dir.y) > .9 * dir.length() ? V(1, 0, 0) : V(0, 1, 0)).normalize();
+        for (let l = 0; l < lanes; l++) { const o = (l - (lanes - 1) / 2) * .12;
+          lwTrain(thick, p.clone().addScaledVector(side, o), q.clone().addScaledVector(side, o), al, gi * 1.3 + pi * .41, MARK.lw, 1.1, 1.4); }
+        landing(q, k, .12 + Math.sqrt(per) * .03, al);
+      });
+    });
+  },
+  wallCond(only) {  // conduction at the inside face of the walls: into the wall (stored) or out of it
+    const r = S.r;
+    for (const k of ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W']) {
+      if (!SURF[k].vis() || (only && !only.includes(k))) continue; const q = r.S[k].cond, n = Math.min(24, Math.round(Math.abs(q) / SCALE.cond)), into = q < 0;
+      for (let j = 0; j < n; j++) { const p = SURF[k].pt(j * 13 + 5), b = p.clone().addScaledVector(SURF[k].n, -.28), a = p.clone().addScaledVector(SURF[k].n, .35);
+        pulses(thick, into ? [a, p, b] : [b, p, a], MARK.ink, 1, .22, .6, .25, j * .41); }
+    }
+  },
+  lwPeople() {
+    const r = S.r, n = nFig(); if (!n) return; const per = r.pplRad / Math.max(1, r.occ), al = clamp(per / 25, .35, 1);
+    for (let i = 0; i < n; i++) { const c = people[i].position;
+      for (const [y, ph] of [[.55, 0], [1.0, .33], [1.38, .66]]) for (let k = 0; k < 2; k++) { const u = frac(CLK * .45 + ph + k * .5 + i * .17); ring(thick, V(c.x, y, c.z), .22 + u * 1.5, al * Math.pow(1 - u, 1.4)); } }
+  },
+  lwLights() {
+    const r = S.r; if (r.litRad < 5) return; const per = r.litRad / 6, n = clamp(Math.round(per / 20), 1, 6);
+    fixtures.forEach((f, i) => { for (let k = 0; k < n; k++) { const a = V(f.position.x + (k - (n - 1) / 2) * .25, 3.57, f.position.z); lwTrain(thick, a, V(a.x + (k - (n - 1) / 2) * .35, .02, a.z + ((k % 3) - 1) * .5), .8, i * .4 + k * .27); } });
+  },
+  visible() {
+    const r = S.r; if (r.litVis < 5) return; const n = clamp(Math.round(r.litVis / 6 / 8), 1, 6);
+    fixtures.forEach((f, i) => { for (let k = 0; k < n; k++) { const a = V(f.position.x + (k - (n - 1) / 2) * .25, 3.57, f.position.z); pulses(thin, [a, V(a.x + (k - (n - 1) / 2) * .3, .02, a.z)], MARK.sun, .75, .4, 1.1, 2.4, i * .3 + k * .2); } });
+  },
+  lwEquip() {
+    const r = S.r, n = clamp(Math.round(r.eqRad / 2 / 25), 0, 10);
+    equipment.forEach((e, i) => { for (let k = 0; k < n; k++) { const a = V(e.position.x + .31, .2 + (k % 3) * .35, e.position.z + ((k % 4) - 1.5) * .2); lwTrain(thick, a, V(a.x + 1.2 + (k % 3) * .5, .02, a.z + (k - n / 2) * .3), .85, i * .5 + k * .3); } });
+  },
+  convSurf(only) { // each surface: plumes up if it heats the air, down if it cools it (EnergyPlus inside-face convection)
+    const r = S.r;
+    for (const k of SURFKEYS) {
+      if (!SURF[k].vis() || (only && !only.includes(k))) continue; const q = r.S[k].conv, n = Math.min(30, Math.round(Math.abs(q) / SCALE.conv)); if (!n) continue;
+      const heats = q < 0, col = tcol(r.Tair + (r.S[k].T - r.Tair) * .6, r.Tair), al = clamp(Math.abs(q) / AREA[k] / 12, .35, 1);
+      for (let j = 0; j < n; j++) {
+        let b = SURF[k].pt(j * 7 + 4).addScaledVector(SURF[k].n, .12);
+        if (!heats) b.y = Math.min(H - .2, b.y + 1.2);
+        plume(thick, b, k === 'Suelo' ? 1.6 : 1.2, al, col, j * .7 + k.length, heats ? 1 : -1);
+      }
+    }
+  },
+  convInternal(only) {
+    const r = S.r, n = only && !only.includes('people') ? 0 : nFig(), per = r.pplConv / Math.max(1, r.occ);
+    for (let i = 0; i < n; i++) for (let k = 0; k < clamp(Math.round(per * SCALE.figure / SCALE.conv), 1, 4); k++) plume(thick, head(i).add(V((k - 1) * .09, .14, 0)), 1.9, .9, tcol(r.Tair + 4, r.Tair), i * 1.3 + k * 2.1);
+    if (r.litConv > 5 && (!only || only.includes('lights'))) fixtures.forEach((f, i) => plume(thick, f.position.clone().add(V(0, .05, 0)), .35, .8, tcol(r.Tair + 6, r.Tair), i));
+    const ne = only && !only.includes('equip') ? 0 : clamp(Math.round(r.eqConv / 2 / SCALE.conv), 0, 6);
+    equipment.forEach((e, i) => { for (let k = 0; k < ne; k++) plume(thick, V(e.position.x + ((k % 3) - 1) * .15, 1.12, e.position.z + ((k > 2) - .5) * .3), 1.8, .85, tcol(r.Tair + 5, r.Tair), i * 2 + k); });
+  },
+  vapour() {
+    const r = S.r, n = nFig(), per = clamp(Math.round(r.pplLat / Math.max(1, r.occ) / 8), 2, 9);
+    for (let i = 0; i < n; i++) for (let k = 0; k < per; k++) { const u = frac(CLK * .12 + k / per + i * .19), h = head(i);
+      dots.dot(V(h.x + .07 * Math.sin(k * 2 + i), 1.55 + u * 1.8, h.z + .07 * Math.cos(k * 2 + i)), Math.sin(u * Math.PI) * .9, MARK.vap); }
+  },
+  glassCond() {
+    const r = S.r, q = r.gCond, inward = q > 0, n = Math.min(40, Math.round(Math.abs(q) / 40));
+    for (let k = 0; k < n; k++) { const x = WIN.x0 + .3 + frac(k * .618) * (WIN.x1 - WIN.x0 - .6), y = WIN.y0 + .2 + frac(k * .382) * (WIN.y1 - WIN.y0 - .4);
+      const a = V(x, y, -1), b = V(x, y, .6); pulses(thick, inward ? [a, b] : [b, a], MARK.ink, .85, .25, 1.2, .5, k * .3); }
+  },
+  vent() {
+    const r = S.r; if (r.oaFlow < .01) return; const cIn = tcol(r.Tout, r.Tair), cMix = tcol(r.Tmix, r.Tair), cRoom = tcol(r.Tair, r.Tair), v = r.oaFlow / .384 * 1.3;
+    [3.3, 3.8, 4.3, 4.8].forEach((zi, i) => {
+      const pts = bezPts([V(-2.4, 3.2, zi), V(2.6, 3.2, zi), V(8, 1.1 + i * .25, 2 + i * 1.4), V(W + .6, 3.3, 1.5 + i * 1.6)]), tot = polyLen(pts);
+      for (let d = frac((CLK * v + i * .9) / 1.6) * 1.6; d < tot; d += 1.6) { const q0 = pointAt(pts, Math.max(0, d - .5)), q1 = pointAt(pts, d), u = d / tot;
+        const col = u < .2 ? cIn : cMix.clone().lerp(cRoom, clamp((u - .2) * 1.4)); thick.seg(q0, q1, .2, .95 * smooth(0, .08, u) * (1 - smooth(.92, 1, u)), col); }
+    });
+  },
+  infil() {
+    const r = S.r, c = tcol(r.Tout, r.Tair), n = Math.max(4, Math.round(r.infFlow / .05 * 14));
+    for (let k = 0; k < n; k++) { const p = V(WIN.x0 + k * (WIN.x1 - WIN.x0) / (n - 1), WIN.y0 - .03, -T - .1); pulses(thick, [p, p.clone().add(V(0, .1, 1.3))], c, .9, .25, .7, .6, k * .3); }
+  },
+  system() {
+    const r = S.r, c = tcol(r.Tsup || r.Tair, r.Tair), sp = clamp(16000 / (Math.abs(r.loadS) + 1), .7, 6);
+    [0, 1, 2, 3, 4, 5].forEach(i => { const th = i / 6 * Math.PI * 2 + .3, o = V(6.35, 3.82, 4.75);
+      pulses(thick, bezPts([o, V(o.x + .5 * Math.cos(th), 3.65, o.z + .5 * Math.sin(th)), V(o.x + 2.2 * Math.cos(th), 2.8, o.z + 2.2 * Math.sin(th)), V(o.x + 3 * Math.cos(th), 1.6, o.z + 3 * Math.sin(th))]), c, .95, .4, sp, 1.2, i * .5); });
+  },
+};
+
+// ================================================================ labels & annotations
+const labelsEl = document.getElementById('labels');
+let LABS = [];
+const label = (p, html, est = false) => LABS.push({ p, html, est });
+function drawLabels() {
+  while (labelsEl.children.length < LABS.length) { const d = document.createElement('div'); d.className = 'lab'; labelsEl.appendChild(d); }
+  [...labelsEl.children].forEach((el, i) => {
+    const L = LABS[i]; if (!L) { el.style.display = 'none'; return; }
+    const q = L.p.clone().project(camera); if (q.z > 1) { el.style.display = 'none'; return; }
+    el.style.display = ''; el.style.left = `${(q.x + 1) / 2 * canvas.clientWidth}px`; el.style.top = `${(1 - q.y) / 2 * canvas.clientHeight}px`;
+    el.classList.toggle('est', L.est); if (el._h !== L.html) { el.innerHTML = L.html; el._h = L.html; }
+  });
+}
+const ANNOT = {
+  angle() {
+    if (!S.up) return; const c = V(6, 2, -T - .02), n = V(0, 0, -1), s = S.sv.clone();
+    ink.seg(c, c.clone().addScaledVector(n, 3), .9, .9, MARK.ink); ink.seg(c, c.clone().addScaledVector(s, 3), .9, .9, MARK.sun);
+    let prev = null; for (let i = 0; i <= 20; i++) { const v = n.clone().lerp(s, i / 20).normalize().multiplyScalar(1.1).add(c); if (prev) ink.seg(prev, v, .9, .9, MARK.ink); prev = v; }
+    label(n.clone().lerp(s, .5).normalize().multiplyScalar(1.25).add(c), `<i>θ</i> = <b>${f0(Math.acos(clamp(-S.sv.z, -1, 1)) * 180 / Math.PI)}°</b>`);
+  },
+  split() { const r = S.r; label(V(9.6, 3.6, -T), `<i>ρ</i> reflected <b>${kW(r.Qref)}</b>`); label(V(9.6, 2.0, -T), `<i>α</i> absorbed in the panes <b>${kW(r.Qabs)}</b>`); label(V(9.6, .9, .6), `<i>τ</i> transmitted <b>${kW(r.Qtr)}</b>`); },
+  patch() {
+    if (!LIT.length) return; let x0 = 99, x1 = -1, z0 = 99, z1 = -1;
+    for (const p of LIT) { x0 = Math.min(x0, p.x - .25); x1 = Math.max(x1, p.x + .25); z0 = Math.min(z0, p.z - .25); z1 = Math.max(z1, p.z + .25); }
+    label(V(x1, .05, (z0 + z1) / 2), `<i>A</i><sub>sunlit</sub> = <b>${f1(LIT.length * CELL * CELL)} m²</b>`);
+  },
+  temps() { const r = S.r; for (const k of ['Muro_N', 'Muro_W', 'Glass', 'Suelo']) if (SURF[k].vis()) label(SURF[k].pt(11).add(V(0, .25, 0)), `${NAME[k]} <b>${f1(r.S[k].T)} °C</b>`); },
+  cut() { const r = S.r, x = r.fx; label(V(W + T, .3, 4.2), `cut colour scale <b>${f1(Math.min(...r.fT))}–${f1(Math.max(...r.fT))} °C</b> (blue → red)`, true); label(V(W + T, -.01, 4.2), `tile, inside face <b>${f1(r.fT[x.length - 1])} °C</b>`); label(V(W + T, -.12, 4.2), `concrete <b>${f1(r.fT[5])} °C</b>`); label(V(W + T, -SLAB + .02, 4.2), `XPS, ground side <b>${f1(r.fT[0])} °C</b>`); },
+  people() { if (nFig()) label(people[0].position.clone().setY(1.8), `clothing <b>31 °C</b>`, true); },
+};
+
+// ================================================================ the steps (every number from EnergyPlus unless tagged)
+const CAM = {
+  glassOut: { p: V(-1.5, 4.2, -10.5), t: V(6, 2, 0) }, glassIn: { p: V(9.8, 2.1, 7.2), t: V(5, 1.9, 0) },
+  patch: { p: V(15.5, 6.5, 12.5), t: V(6, .4, 2.6) }, patchLow: { p: V(10.5, 2.4, 8.5), t: V(6, .2, 1.6) },
+  cut: { p: V(14.3, .28, 2.9), t: V(12.3, -.12, 1.4) }, release: { p: V(10, 2.4, 12.5), t: V(6, .3, 5) },
+  room: { p: V(13, 4.2, 11.5), t: V(5.5, 1.3, 2.8) }, people: { p: V(13.5, 2.6, 12), t: V(6.5, .9, 5) },
+  person: { p: V(5.6, 1.8, 8.6), t: V(3.2, 1.1, 4.4) }, lights: { p: V(11.5, 1.5, 11), t: V(6, 3.1, 4) },
+  equip: { p: V(5, 1.7, 9.5), t: V(1.4, .7, 5.8) }, sky: { p: V(27, 15, 27), t: V(6, 3, 4) }, floorEl: { p: V(15.5, 3.4, 9.5), t: V(7, -.1, 2.6) },
+  wallN: { p: V(17, 7, -6), t: V(5, 1.4, 6) }, wallE: { p: V(-5, 7, -6), t: V(8, 1.4, 5) }, wallW: { p: V(17, 7, -6), t: V(3, 1.4, 5) }, wallS: { p: V(17, 7, 14), t: V(4, 1.4, 1) }, ceil: { p: V(15, 1.2, 12), t: V(6, 3.6, 3.5) }, air: { p: V(6, 6.5, 15.5), t: V(6, 2.4, 4) }, overview: { p: V(18, 9.5, 16.5), t: V(6, 1.2, 4) },
+};
+const sym = s => `<span class="sym">${s}</span>`;
+
+const GLOSS = {
+  'I_{inc}': 'incident irradiance on the glazing plane, W/m²', 'I_{b}': 'direct normal irradiance, W/m²', 'I_{d,sky+ground}': 'diffuse irradiance from sky and ground on the plane, W/m²',
+  'θ': 'angle of incidence to the glazing normal', 'A_{g}': 'glazing area, 27 m²', 'A_{sunlit}': 'sunlit floor area, m²', 'A': 'surface area, m²',
+  'Q_{inc}': 'solar radiation incident on the glazing, W', 'Q_{beam}': 'transmitted beam radiation, W', 'Q_{sens}': 'sensible heat per person, W', 'Q_{conv}': 'convective heat flow, W',
+  'Q_{lat}': 'latent heat flow, W', 'Q_{lw}': 'net long-wave flow, W', 'Q_{cond}': 'conduction, W', 'Q_{vis}': 'visible radiation, W', 'Q_{rad}': 'radiant heat, W', 'Q_{ret}': 'heat to the return air, W',
+  'Q_{gain}': 'instantaneous heat gain, W', 'Q_{st}': 'heat storage rate, W', 'Q_{inf}': 'infiltration heat flow, W',
+  'q_{patch}': 'direct-beam flux on the sunlit floor area, W/m²', 'q_{abs}': 'absorbed flux, W/m²', 'q_{lw}': 'net long-wave flux, W/m²', 'q_{conv}': 'convective flux, W/m²', 'q_{cond}': 'conductive flux, W/m²', 'q̄': 'mean absorbed flux over the floor, W/m²',
+  'τ': 'solar transmittance of the glazing', 'α_{s}': 'solar absorptance of the floor', 'α': 'solar absorptance of the panes', 'N_{i}': 'inward-flowing fraction of the absorbed solar',
+  'ε': 'long-wave emissivity', 'σ': 'Stefan–Boltzmann constant, 5,67·10⁻⁸ W/m²K⁴', 'F': 'view factor',
+  'T_{mrt}': 'mean radiant temperature of the room, K', 'T_{s}': 'surface temperature, K', 'T_{g}': 'inside temperature of the glazing, K', 'T_{f}': 'floor temperature, K', 'T_{w}': 'wall temperature, K',
+  'T_{b}': 'clothing surface temperature, K', 'T_{out}': 'outdoor air temperature, °C', 'T_{in}': 'indoor air temperature, °C', 'T_{air}': 'room air temperature, °C', 'T_{mix}': 'outdoor air after heat recovery, °C', 'T_{floor}': 'mean floor temperature, °C',
+  'h_{c}': 'convective heat transfer coefficient, W/m²K', 'h_{r}': 'radiative heat transfer coefficient, W/m²K', 'h_{fg}': 'latent heat of vaporisation, 2.454 kJ/kg',
+  'k': 'thermal conductivity, W/m·K', 'δ': 'heat penetration depth, m', 'Δx': 'thickness between nodes, m', 'ΔT': 'temperature difference, K', 'dT/dx': 'temperature gradient, K/m', 'dT/dt': 'temperature change rate, K/s', 'Δt': 'time step, s',
+  'ρ': 'density, kg/m³', 'c': 'specific heat, J/kg·K', 'c_{p}': 'specific heat of air, 1.006 J/kg·K', 'V': 'volume, m³', 'V̇': 'volume flow rate, m³/s', 'ṁ': 'mass flow rate, kg/s', 'ṁ_{w}': 'vapour mass flow, kg/h',
+  'η_{s}': 'sensible recovery efficiency', 'η_{l}': 'latent recovery efficiency', 'w_{out}': 'outdoor humidity ratio, kg/kg', 'w_{in}': 'indoor humidity ratio, kg/kg',
+  'U': 'thermal transmittance, W/m²K', 'n': 'number of occupants', 'f_{rad}': 'radiant fraction', 'f_{conv}': 'convective fraction', 'f_{vis}': 'visible fraction', 'P': 'electric power, W',
+};
+const tokOf = h => String(h).replace(/<sub>(.*?)<\/sub>/g, '_{$1}').replace(/<[^>]+>/g, '');
+function glossFor(lhs, def) {
+  const txt = tokOf(lhs) + ' ' + tokOf(def), out = [];
+  const re = /dT\/d[xt]|Δ[xtT]|(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽṁ][̀-ͯ]?(?:_\{[^}]*\})?(?![A-Za-z])/g;
+  for (const m of txt.matchAll(re)) { const k = m[0]; if (GLOSS[k] && !out.some(o => o[0] === k)) out.push([k, GLOSS[k]]); }
+  if (!out.length) return '';
+  const show = k => k.replace(/_\{(.*?)\}/, '<sub>$1</sub>');
+  return `<span class="defs">${out.map(([k, d]) => `<span><i>${show(k)}</i> ${d}</span>`).join('')}</span>`;
+}
+const isRelation = d => /[·\/=Σ+−(⁴×]/.test(String(d).replace(/<[^>]+>/g, ''));
+const eq = (lhs, def, num, res, src = 'ep') => isRelation(def)
+  ? `<div class="eq"><span class="lhs">${sym(lhs)}</span><span class="rhs">= ${def}${tag(src)}</span><span class="res">${res}</span>${num ? `<span class="sub">= ${num}</span>` : ''}${glossFor(lhs, def)}</div>`
+  : `<div class="kpi"><div class="s">${sym(lhs)}</div><div class="v">${res}</div><div class="l">${def}${tag(src)}</div></div>`;
+const KEY = { sun: ['#f2b600', 'short-wave (sunlight)'], lw: ['#a0124f', 'long-wave (heat) radiation'], ink: ['#1b1b1b', 'conduction'], air: ['linear-gradient(90deg,#2f6fc0,#f3f1ec,#ef8a4b)', 'air, coloured by its temperature'], vap: ['#1f8a99', 'water vapour'] };
+
+const C = { sun: '#d99a00', lw: '#7b2fd0', conv: '#ef7d00', cond: '#e3170a', vap: '#0f9fb0', load: '#2f6fc0', grey: '#8a8a8a', ink: '#1b1b1b' };
+const ser = (n, f, c) => ({ n, f, c });
+function seriesFor(st) {
+  const k = st.k, F = k ? (g => r => g(r.S[k])) : null;
+  if (k) {
+    const all = [ser('Q<sub>sw</sub> absorbed short-wave', F(s => s.sol), C.sun), ser('Q<sub>ir</sub> internal-gain radiation', F(s => s.ir), C.grey), ser('Q<sub>lw</sub> net long-wave', F(s => s.lw), C.lw), ser('Q<sub>cv</sub> convection (+ into the face)', F(s => s.conv), C.conv), ser('Q<sub>cd</sub> conduction (+ out of the mass)', F(s => s.cond), C.cond)];
+    if (st.title.startsWith('All together')) return all;
+    if (st.title.startsWith('Incident solar on the glazing')) return [ser('Q<sub>inc</sub> incident solar on the glazing (A<sub>g</sub> = 27 m²)', r => r.Qinc, C.sun)];
+    if (st.title.startsWith('Reflected')) return [ser('Q<sub>ρ</sub> reflected', r => r.Qref, C.grey), ser('Q<sub>α</sub> absorbed in the panes', r => r.Qabs, C.cond), ser('Q<sub>τ</sub> transmitted', r => r.Qtr, C.sun)];
+    if (st.title.startsWith('Conduction through')) return [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond)];
+    if (st.title.startsWith('Storage')) return [ser('Q<sub>st</sub> storage rate in the slab', r => r.Qst, C.cond)];
+    if (st.title.startsWith('Release')) return [ser('Q<sub>cd</sub> out of the slab', F(s => s.cond), C.cond), ser('Q<sub>cv</sub> floor → air', F(s => -s.conv), C.conv)];
+    return all.filter((_, j) => ['sol', 'ir', 'lw', 'conv', 'cond'][j] === st.hl);
+  }
+  const T = st.title;
+  const M = {
+    "The sun's path": [ser('I<sub>b</sub> direct normal irradiance, W/m²', r => r.DNI, C.sun), ser('I<sub>inc</sub> incident irradiance, glazing plane, W/m²', r => r.Iinc, C.grey)],
+    'Sun and sky': [ser('I<sub>b</sub> direct normal irradiance, W/m²', r => r.DNI, C.sun), ser('I<sub>inc</sub> incident irradiance, glazing plane, W/m²', r => r.Iinc, C.grey)],
+    'Incident solar on the glazing': [ser('Q<sub>inc</sub> incident solar on the glazing (A<sub>g</sub> = 27 m²)', r => r.Qinc, C.sun)],
+    'Reflected, absorbed, transmitted': [ser('Q<sub>ρ</sub> reflected', r => r.Qref, C.grey), ser('Q<sub>α</sub> absorbed in the panes', r => r.Qabs, C.cond), ser('Q<sub>τ</sub> transmitted', r => r.Qtr, C.sun)],
+    'Direct sun on the floor': [ser('Q<sub>τ,b</sub> transmitted beam', r => r.Qbeam, C.sun), ser('Q<sub>τ,d</sub> transmitted diffuse', r => r.Qdiff, C.grey)],
+    'Light becomes heat': [ser('Q<sub>sw,floor</sub> absorbed by the floor', r => r.S.Suelo.sol, C.sun), ser('Q<sub>sw,walls</sub> absorbed by the walls', r => r.S.Muro_N.sol + r.S.Muro_E.sol + r.S.Muro_W.sol + r.S.Muro_S.sol, C.grey)],
+    'Where the floor sends its heat': [ser('Q<sub>sw</sub> absorbed short-wave', r => r.S.Suelo.sol, C.sun), ser('Q<sub>lw</sub> net long-wave', r => r.S.Suelo.lw, C.lw), ser('Q<sub>cv</sub> convection', r => r.S.Suelo.conv, C.conv), ser('Q<sub>cd</sub> conduction', r => r.S.Suelo.cond, C.cond)],
+    'Conduction into the slab': [ser('Q<sub>cd</sub> into the slab', r => -r.S.Suelo.cond, C.cond)],
+    'Storage in the mass': [ser('Q<sub>st</sub> storage rate in the slab', r => r.Qst, C.cond)],
+    'Release when the sun has gone': [ser('Q<sub>cd</sub> out of the slab', r => r.S.Suelo.cond, C.cond), ser('Q<sub>cv</sub> floor → air', r => -r.S.Suelo.conv, C.conv)],
+    'Surfaces exchange heat radiation': [ser('Q<sub>lw,glazing</sub>', r => r.S.Glass.lw, C.lw), ser('Q<sub>lw,roof</sub>', r => r.S.Cubierta.lw, C.grey), ser('Q<sub>lw,floor</sub>', r => r.S.Suelo.lw, C.sun)],
+    'People radiate': [ser('Q<sub>rad</sub> radiant', r => r.pplRad, C.lw)], 'Radiation from each body': [ser('Q<sub>rad</sub> radiant', r => r.pplRad, C.lw)],
+    'Lights radiate': [ser('Q<sub>vis</sub> visible', r => r.litVis, C.sun), ser('Q<sub>rad</sub> radiant', r => r.litRad, C.lw)],
+    'Equipment radiates': [ser('Q<sub>rad</sub> radiant', r => r.eqRad, C.lw)],
+    'Surfaces heat (or cool) the air': [ser('Q<sub>cv,surf</sub> surfaces → air', r => r.surfConv, C.conv)],
+    'People, lights and equipment heat the air': [ser('Q<sub>cv,int</sub> convective internal gains', r => r.intConv, C.conv)],
+    'Convection to the air': [ser('Q<sub>conv</sub> convective', r => r.pplConv, C.conv)],
+    'People release moisture': [ser('Q<sub>lat</sub> latent', r => r.pplLat, C.vap)], 'Moisture': [ser('Q<sub>lat</sub> latent', r => r.pplLat, C.vap)],
+    'Conduction through the glass': [ser('Q<sub>cd,g</sub> conduction through the glazing', r => r.gCond, C.cond)],
+    'Ventilation with heat recovery': [ser('Q<sub>rec</sub> recovered sensible', r => r.hrSens, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaSens, C.load)],
+    'Ventilation through the heat recovery': [ser('Q<sub>rec</sub> recovered sensible', r => r.hrSens, C.grey), ser('Q<sub>OA</sub> outdoor-air load after recovery', r => r.oaSens, C.load)],
+    'Infiltration': [ser('Q<sub>inf</sub> infiltration, sensible', r => r.infil, C.load)],
+    'The air heat balance': [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)],
+    'Heat gain is not cooling load': [ser('Q<sub>gain</sub> instantaneous heat gain', r => r.Qtr + r.pplSens + r.litVis + r.litRad + r.litConv + r.eqRad + r.eqConv, C.cond), ser('Q<sub>s</sub> sensible cooling load', r => r.loadS, C.load)],
+  };
+  if (M[T]) return M[T];
+  if (st.g === 'Lights') return T === 'Visible light' ? [ser('Q<sub>vis</sub> visible', r => r.litVis, C.sun)] : T === 'Heat radiation' ? [ser('Q<sub>rad</sub> radiant', r => r.litRad, C.lw)] : T === 'Convection' ? [ser('Q<sub>conv</sub> convective', r => r.litConv, C.conv)] : [ser('Q<sub>vis</sub> visible', r => r.litVis, C.sun), ser('Q<sub>rad</sub> radiant', r => r.litRad, C.lw), ser('Q<sub>conv</sub> convective', r => r.litConv, C.conv)];
+  if (st.g === 'Equipment') return T === 'Heat radiation' ? [ser('Q<sub>rad</sub> radiant', r => r.eqRad, C.lw)] : [ser('Q<sub>conv</sub> convective', r => r.eqConv, C.conv)];
+  if (st.g === 'People') return [ser('Q<sub>rad</sub> radiant', r => r.pplRad, C.lw), ser('Q<sub>conv</sub> convective', r => r.pplConv, C.conv), ser('Q<sub>lat</sub> latent', r => r.pplLat, C.vap)];
+  return [ser('Q<sub>load</sub> sensible load on the system', r => r.loadS, C.load)];
+}
+// what each plotted quantity is, in more depth than the legend (shown under the graph)
+const Ib = '<i>I</i><sub>b</sub>', th = '<i>θ</i>';
+const ABOUT = {
+  'I_{b}': ['Direct normal irradiance',
+    `<b>Direct</b>: only the beam coming straight from the solar disc, without the light scattered by the sky. <b>Normal</b>: measured on a plane held perpendicular to that beam, so it is the most the beam can deliver per square metre. Any other plane receives ${Ib}·cos ${th}, where ${th} is the angle between the rays and that plane's normal. Clouds, haze and a low sun (a longer path through the atmosphere) lower it.`],
+  'I_{inc}': ['Incident irradiance on the glazing plane',
+    `All the solar power reaching one square metre of the outer glass face. It has three parts: the beam projected onto the plane, ${Ib}·cos ${th}; diffuse light from the sky dome; and light reflected by the ground. On a south façade in summer it stays below ${Ib}: the sun is high, so the beam strikes the vertical glass at a steep angle (large ${th}, small cos ${th}). Early and late in the day, with the sun behind the façade, only the diffuse part remains.`],
+  'Q_{inc}': ['Incident solar on the glazing', `Incident irradiance times the glazing area, <i>I</i><sub>inc</sub>·<i>A</i><sub>g</sub>: the solar power arriving at the outside of the glass, before any of it is reflected, absorbed or transmitted.`],
+  'Q_{ρ}': ['Reflected', 'The part of the incident solar that the glazing sends back outdoors. It never enters the room.'],
+  'Q_{α}': ['Absorbed in the panes', 'The part stopped inside the glass and its coatings. It warms the panes, which pass part of that heat inwards by convection and long-wave radiation, and the rest outwards.'],
+  'Q_{τ}': ['Transmitted', 'The part that passes through the glazing as short-wave light, beam plus diffuse. It heats nothing until a room surface absorbs it.'],
+  'Q_{τ,b}': ['Transmitted beam', 'Direct sun that has passed the glazing. It keeps its direction, so it lands on a well-defined sunlit area of floor or wall.'],
+  'Q_{τ,d}': ['Transmitted diffuse', 'Scattered sky and ground light that has passed the glazing. It has no single direction: it spreads over all the room surfaces, weighted by how much of the window each one sees (its view factor).'],
+  'Q_{sw}': ['Absorbed short-wave', 'Sunlight and lamp light absorbed at the inside face, where it becomes heat.'],
+  'Q_{ir}': ['Internal-gain radiation', 'The radiant share of people, lights and equipment that lands on this face. Like sunlight, it warms the surface first, not the air.'],
+  'Q_{lw}': ['Net long-wave radiation', 'Heat radiation exchanged with the other room surfaces, proportional to <i>T</i>⁴. Positive: the face receives more than it emits, because what it sees is warmer than it is.'],
+  'Q_{cv}': ['Convection', 'Heat carried between the face and the air touching it, <i>h</i><sub>c</sub>·<i>A</i>·(<i>T</i><sub>s</sub> − <i>T</i><sub>air</sub>). This is where a surface gain becomes load on the air. The legend gives the sign.'],
+  'Q_{cd}': ['Conduction', 'Heat moving through the construction, driven by the temperature gradient across its layers. Going into the mass, it is stored; coming out, it returns to the face hours later.'],
+  'Q_{cd,g}': ['Conduction through the glazing', `Heat crossing the glazing because the indoor and outdoor temperatures differ, about <i>U</i>·<i>A</i>·(<i>T</i><sub>out</sub> − <i>T</i><sub>in</sub>). Glass is thin and light, so there is no storage and no delay.`],
+  'Q_{st}': ['Storage rate in the slab', 'How fast the heat content of the slab changes: Σ ρ·c·Δx·dT/dt over its layers. Positive: the slab is charging. Negative: it is giving heat back.'],
+  'Q_{rad}': ['Radiant gain', 'The share of a source emitted as heat radiation. It reaches the air only after warming the room surfaces, so it arrives later.'],
+  'Q_{vis}': ['Visible light', 'Light from the lamps. It becomes heat wherever a surface absorbs it, like sunlight.'],
+  'Q_{conv}': ['Convective gain', 'The share released straight into the air. It is load at once: no storage, no delay.'],
+  'Q_{cv,surf}': ['Surfaces to the air', 'Convection from every room surface to the air, added up. Positive: the surfaces heat the air.'],
+  'Q_{cv,int}': ['Convective internal gains', 'The convective share of people, lights and equipment, which goes straight into the air.'],
+  'Q_{lat}': ['Latent gain', 'Heat carried by the water vapour that people release. It does not raise the air temperature; the system removes it by drying the air.'],
+  'Q_{rec}': ['Recovered sensible heat', 'Heat exchanged between the incoming outdoor air and the exhaust air, ṁ·c<sub>p</sub>·(<i>T</i><sub>out</sub> − <i>T</i><sub>mix</sub>). In summer it pre-cools the fresh air; in winter it pre-heats it.'],
+  'Q_{OA}': ['Outdoor-air load after recovery', 'What is left of the ventilation load once the recovery has done its part. The system handles it; it is not a load on the room.'],
+  'Q_{inf}': ['Infiltration', 'Outdoor air leaking in through the façade, with no recovery. It acts directly on the room air.'],
+  'Q_{s}': ['Sensible load', 'The heat the system must remove (positive) or add (negative) to hold the room air temperature.'],
+  'Q_{l}': ['Latent load', 'The moisture the system must remove, expressed as heat.'],
+  'Q_{gain}': ['Instantaneous heat gain', 'Everything entering the room at this moment: transmitted sun plus people, lights and equipment. Its radiant part goes into the surfaces first.'],
+  'Q_{load}': ['Sensible load on the system', 'The heat the system must remove (positive) or add (negative) to hold the room air temperature.'],
+};
+function aboutOf(name) {   // look a series up by its symbol; 'Q_{lw,roof}' falls back to 'Q_{lw}'
+  const symH = name.split(' ')[0], k = tokOf(symH);
+  const hit = ABOUT[k] || ABOUT[k.replace(/,[^}]*\}/, '}')];
+  return hit ? { k: ABOUT[k] ? k : k.replace(/,[^}]*\}/, '}'), symH, name: hit[0], text: hit[1] } : null;
+}
+const niceUp = v => { if (v <= 0) return 0; const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; };
+// the graph is drawn once per step; each time step only moves the marker and the values
+let CH = null;
+function chart24(st) {
+  const S_ = seriesFor(st); if (!S_.length) { CH = null; return ''; }
+  const Wd = 410, Hd = 150, pts = S_.map(x => Array.from({ length: 480 }, (_, j) => x.f(row(j))));
+  let lo = Infinity, hi = -Infinity; for (const a of pts) for (const v of a) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const mx = niceUp(Math.max(hi, 1)), mn = lo < 0 ? -niceUp(-lo) : 0;
+  const Y = v => 4 + (mx - v) / (mx - mn) * (Hd - 18), X = j => (j / 480 * Wd).toFixed(1);
+  const unit = S_[0].n.includes('W/m²') ? ' W/m²' : ' W', valU = S_[0].n.includes('W/m²') ? '' : ' W';
+  const lines = S_.map((x, s) => `<polyline points="${pts[s].map((v, j) => `${X(j)},${Y(v).toFixed(1)} ${X(j + 1)},${Y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${x.c}" stroke-width="1.8" stroke-linejoin="round"/>`).join('');
+  const dots = S_.map(x => `<circle r="3" fill="${x.c}" stroke="#fff" stroke-width="1"/>`).join('');
+  const grid = [0, 6, 12, 18, 24].map(h => `<line x1="${X(h * 20)}" x2="${X(h * 20)}" y1="2" y2="${Hd - 14}" stroke="#ece9e3"/><text x="${X(h * 20)}" y="${Hd - 3}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${String(h).padStart(2, '0')}</text>`).join('');
+  const yLab = (v, y, dy) => `<line x1="0" x2="${Wd}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ece9e3"/><text x="${Wd - 2}" y="${(y + dy).toFixed(1)}" text-anchor="end" paint-order="stroke" stroke="#fff" stroke-width="3">${f0(v)}${unit}</text>`;
+  const axes = yLab(mx, Y(mx), 10) + (mn < 0 ? yLab(mn, Y(mn), -4) + `<line x1="0" x2="${Wd}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#b9b5ae" stroke-dasharray="3 3"/>` : '');
+  const seen = new Set(), about = S_.map(x => aboutOf(x.n)).filter(a => a && !seen.has(a.k) && seen.add(a.k));
+  CH = { S_, Y, Wd, valU };
+  return `<div class="chart"><svg width="${Wd}" height="${Hd}" style="display:block;font:10px 'IBM Plex Sans';fill:#8a8a8a">${grid}${axes}${lines}
+    <line class="now" y1="2" y2="${Hd - 14}" stroke="#1b1b1b"/>${dots}</svg>
+    <div class="lg">${S_.map(x => `<span><i style="background:${x.c}"></i>${x.n}</span><b></b>`).join('')}</div>
+    ${about.length ? `<div class="about">${about.map(a => `<p><span class="an"><i>${a.symH[0]}</i>${a.symH.slice(1)}</span> <b>${a.name}</b>. ${a.text}</p>`).join('')}</div>` : ''}</div>`;
+}
+function chartTick(r) {   // move the "now" marker and refresh the values for this time step
+  const el = $('cChart'); if (!CH || !el) return;
+  const x = ((r.i + .5) / 480 * CH.Wd).toFixed(1), ln = el.querySelector('.now'); ln.setAttribute('x1', x); ln.setAttribute('x2', x);
+  el.querySelectorAll('circle').forEach((c, s) => { c.setAttribute('cx', x); c.setAttribute('cy', CH.Y(CH.S_[s].f(r)).toFixed(1)); });
+  el.querySelectorAll('.lg b').forEach((b, s) => b.textContent = `${f0(CH.S_[s].f(r))}${CH.valU}`);
+}
+function dayChart() { return eq('Q<sub>load</sub>', 'later and lower than the gain', '', kW(S.r.loadS)); }
+function argmax(f) { let b = 0, bv = -Infinity; for (let i = 0; i < 480; i++) { const v = f(row(i)); if (v > bv) { bv = v; b = i; } } return b / 20; }
+function processSteps() {
+  const sum = season === 'summer';
+  const hs = argmax(r => r.Qinc), hb = argmax(r => r.Qbeam), ho = argmax(r => r.occ * 1000 - Math.abs(r.i / 20 - 18)), hl = SB[season].peak_step / 20, hEve = 21;
+  return [
+    { g: 'Short-wave radiation', title: 'The sun\'s path', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'],
+      say: r => `The sun crosses the sky with this day's solar angles. Watch the rays and the sunlit floor area move as the hours run.`,
+      eq: r => eq('β, φ', 'solar altitude and azimuth', '', `${f1(r.alt)}° · ${f0(r.az)}°`) + eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) },
+    { g: 'Short-wave radiation', title: 'Incident solar on the glazing', t0: hs, cam: 'glassOut', proc: ['sunIn'], an: ['angle'], key: ['sun'],
+      say: r => `Parallel beam radiation reaches the curtain wall at incidence angle θ to its normal. Incident irradiance on the glazing plane = beam projected on the surface normal + diffuse from sky and ground.`,
+      eq: r => { const cs = Math.max(0, -S.sv.z); return eq('I<sub>inc</sub>', 'I<sub>b</sub>·cos θ + I<sub>d,sky+ground</sub>', `${f0(r.DNI)}·${f2(cs)} + ${f0(r.Iinc - r.DNI * cs)}`, `${f0(r.Iinc)} W/m²`) + eq('Q<sub>inc</sub>', 'I<sub>inc</sub>·A<sub>g</sub>', `${f0(r.Iinc)}·${AG} m²`, kW(r.Qinc)); } },
+    { g: 'Short-wave radiation', title: 'Reflected, absorbed, transmitted', t0: hs, cam: 'glassIn', proc: ['glassSplit'], an: ['split'], key: ['sun'],
+      say: r => `At the double low-e glazing each ray is reflected, absorbed in the panes or transmitted. The share of rays drawn doing each is this time step's ρ, α and τ.`,
+      eq: r => `<div class="eq"><span class="lhs"></span><span class="rhs">${sym('ρ')} + ${sym('α')} + ${sym('τ')} = 1 &nbsp;→&nbsp; ${r.Qinc < 1 ? 'no sun on the glazing' : `${f2(r.Qref / r.Qinc)} + ${f2(r.Qabs / r.Qinc)} + ${f2(r.Qtr / r.Qinc)}`}</div>` +
+        eq('Q<sub>τ</sub>', 'transmitted (beam + diffuse)', `${f0(r.Qbeam)} + ${f0(r.Qdiff)} W`, kW(r.Qtr)) + eq('Q<sub>α</sub>', 'absorbed in both panes', '(the simulation gives the sum, not each pane)', kW(r.Qabs)) },
+    { g: 'Short-wave radiation', title: 'Direct sun on the floor', t0: hb, cam: 'patch', proc: ['sunPatch', 'diffuse'], an: ['patch'], key: ['sun'],
+      say: r => `The direct beam that passes the glazing lights up an area of floor: the bright, sunlit rectangle you see. Its size follows from the window and the sun angle, and all the beam energy lands there, so that area gets much hotter than the rest. The diffuse part spreads softly over every surface.`,
+      eq: r => eq('q<sub>sunlit</sub>', 'Q<sub>beam</sub> / A<sub>sunlit</sub>', `${f0(r.Qbeam)} W / ${f1(LIT.length * CELL * CELL)} m²`, `${f0(r.Qbeam / Math.max(.25, LIT.length * CELL * CELL))} W/m²`, 'geo') + eq('Q<sub>diff</sub>', 'transmitted diffuse', '', kW(r.Qdiff)) },
+    { g: 'Short-wave radiation', title: 'Light becomes heat', t0: Math.max(0, hb - 3), t1: hb + 1, cam: 'patchLow', proc: ['sunPatch'], an: ['patch', 'temps'], key: ['sun'],
+      say: r => `Every surface absorbs short-wave light at its face, where it turns into sensible heat. The simulation gives each surface's total; the hotter sunlit area is estimated.`,
+      eq: r => eq('T<sub>sunlit</sub>', 'T<sub>floor</sub> + (q<sub>patch</sub> − q̄)/16', `${f1(r.S.Suelo.T)} + …`, `${f1(patchT(r))} °C`, 'est') },
+    { g: 'Conduction and storage', title: 'Where the floor sends its heat', t0: hb, cam: 'room', proc: ['floorCond', 'convSurf', 'lwNet'], an: ['temps'], key: ['ink', 'air', 'lw'],
+      say: r => `The floor's inside face must balance: what it absorbs goes into the air, to other surfaces, or down into the slab.`,
+      eq: r => { const s = r.S.Suelo; return `<div class="eq">${sym('Q')}<sub>sun</sub> + ${sym('Q')}<sub>int,rad</sub> + ${sym('Q')}<sub>lw</sub> + ${sym('Q')}<sub>conv</sub> + ${sym('Q')}<sub>cond</sub> ≈ 0 ${tag('ep')}<br><span class="num">&nbsp;&nbsp;${f0(s.sol)} + ${f0(s.ir)} + ${f0(s.lw)} + ${f0(s.conv)} + ${f0(s.cond)} W</span> = <span class="res">${f0(s.sol + s.ir + s.lw + s.conv + s.cond)} W</span></div>
+        <div class="eq"><span class="num">conv &lt; 0: the floor heats the air · cond &lt; 0: heat goes down into the slab · lw &gt; 0: it receives net long-wave</span></div>`; } },
+    { g: 'Conduction and storage', title: 'Conduction into the slab', t0: hb, cam: 'cut', proc: ['floorCond'], an: ['cut'], key: ['ink'],
+      say: r => `In the cut, the simulated temperatures through tile, mortar, concrete and XPS. Heat flows down the gradient, from hot to cold.`,
+      eq: r => eq('q<sub>top</sub>', '−k·ΔT/Δx (tile layer)', `−${f2(r.kTop)}·(${f2(r.fT[r.fT.length - 1])} − ${f2(r.fT[r.fT.length - 2])}) / ${f3(r.dxTop)}`, `${f0(-r.qTop)} W/m² down`) + eq('Q<sub>cond</sub>', 'inside-face conduction × A', '', Wf(r.S.Suelo.cond)) },
+    { g: 'Conduction and storage', title: 'Storage in the mass', t0: 8, t1: 18, cam: 'cut', proc: ['floorCond'], an: ['cut'], key: ['ink'],
+      say: r => `The slab warms a fraction of a degree, but over ${f0(CONC_T)} t of concrete. That is energy the room has gained and the air has not felt yet.`,
+      eq: r => eq('Q<sub>st</sub>', 'A·Σ ρ·c·Δx·dT/dt (slab nodes)', `96 m² · Σ<sub>${N_NODES} nodes</sub> … per ${SB[season].step_min * 60} s`, (r.Qst >= 0 ? '+' : '') + Wf(r.Qst)) },
+    { g: 'Conduction and storage', title: 'Release when the sun has gone', t0: 18, t1: 23.95, cam: 'release', proc: ['floorCond', 'convSurf'], an: ['temps'], key: ['ink', 'air'],
+      say: r => r.S.Suelo.cond > 0 ? `No sun now. The slab gives its heat back up through the floor and into the air.` : `The slab is still taking heat in.`,
+      eq: r => eq('Q<sub>cond,floor</sub>', 'heat coming up out of the slab', '', Wf(r.S.Suelo.cond)) + eq('Q<sub>conv,floor</sub>', 'floor → air', '', Wf(-r.S.Suelo.conv)) },
+    { g: 'Long-wave radiation', title: 'Surfaces exchange heat radiation', t0: hs, cam: 'room', proc: ['lwNet'], an: ['temps'], key: ['lw'],
+      say: r => `Each surface radiates as T⁴. Net, heat goes from the hotter surfaces to the colder ones; here the ${r.TgIn > r.S.Suelo.T ? 'hot glass is the main emitter' : 'cold glass is the main sink'}.`,
+      eq: r => eq('q<sub>glass→floor</sub>', 'ε·σ·(T<sub>g</sub>⁴ − T<sub>f</sub>⁴)', `0,84·5,67·10⁻⁸·(${f1(r.TgIn + 273.15)}⁴ − ${f1(r.S.Suelo.T + 273.15)}⁴)`, `${f0(.84 * SIGMA * ((r.TgIn + 273.15) ** 4 - (r.S.Suelo.T + 273.15) ** 4))} W/m²`, 'est') },
+    { g: 'Long-wave radiation', title: 'People radiate', t0: ho, cam: 'people', proc: ['lwPeople'], an: ['people'], key: ['lw'],
+      say: r => `Every body radiates in all directions to the cooler surfaces around it. Ring brightness follows the radiant watts per person.`,
+      eq: r => eq('Q<sub>rad</sub>', 'n·f<sub>rad</sub>·Q<sub>sens</sub>', `${f0(r.occ)} people · 0,30 · ${f0(r.pplSens / Math.max(1, r.occ))} W`, Wf(r.pplRad)) },
+    { g: 'Long-wave radiation', title: 'Lights radiate', t0: hEve, cam: 'lights', proc: ['lwLights', 'visible'], an: [], key: ['lw', 'sun'],
+      say: r => `A lamp's power splits into visible light and heat radiation, both landing on surfaces, and a small convective share.`,
+      eq: r => eq('P', 'Q<sub>vis</sub> + Q<sub>rad</sub> + Q<sub>conv</sub> + Q<sub>ret</sub>', `${f0(r.litVis)} + ${f0(r.litRad)} + ${f0(r.litConv)} + ${f0(r.litRet)}`, Wf(r.litVis + r.litRad + r.litConv + r.litRet)) },
+    { g: 'Long-wave radiation', title: 'Equipment radiates', t0: hEve, cam: 'equip', proc: ['lwEquip'], an: [], key: ['lw'],
+      say: r => `Screens and kiosks radiate half their power to the surfaces around them.`,
+      eq: r => eq('Q<sub>rad</sub>', 'f<sub>rad</sub>·P', `0,50·${f0(r.eqRad + r.eqConv)}`, Wf(r.eqRad)) },
+    { g: 'Convection', title: 'Surfaces heat (or cool) the air', t0: hs, cam: 'room', proc: ['convSurf'], an: ['temps'], key: ['air'],
+      say: r => `Air touching a warmer surface heats and rises; next to a colder one it cools and sinks. This is where surface gains become load.`,
+      eq: r => eq('Q<sub>conv,surf</sub>', 'Σ h<sub>c</sub>·A·(T<sub>s</sub> − T<sub>air</sub>)', 'zone air heat balance', Wf(r.surfConv)) },
+    { g: 'Convection', title: 'People, lights and equipment heat the air', t0: ho, cam: 'people', proc: ['convInternal'], an: [], key: ['air'],
+      say: r => `The convective share of every internal gain warms the air at once: no storage, no delay.`,
+      eq: r => eq('Q<sub>conv,int</sub>', 'Σ f<sub>conv</sub>·Q', `${f0(r.pplConv)} + ${f0(r.litConv)} + ${f0(r.eqConv)}`, Wf(r.intConv)) },
+    { g: 'Moisture', title: 'People release moisture', t0: ho, cam: 'person', proc: ['vapour'], an: ['people'], key: ['vap'],
+      say: r => `Breath and skin add water vapour. It carries latent heat: it does not warm the air, but the system must condense it out.`,
+      eq: r => eq('ṁ<sub>w</sub>', 'Q<sub>lat</sub> / h<sub>fg</sub>', `${f0(r.pplLat)} W / 2.454 kJ/kg`, `${f2(r.pplLat / 2454e3 * 3600)} kg/h`) },
+    { g: 'Through the envelope', title: 'Conduction through the glass', t0: hs, cam: 'glassIn', proc: ['glassCond'], an: ['temps'], key: ['ink'],
+      say: r => r.gCond > 0 ? `Outdoors at ${f1(r.Tout)} °C is warmer: heat crosses the glazing inwards.` : `Outdoors at ${f1(r.Tout)} °C is colder: heat leaks out through the glazing.`,
+      eq: r => eq('Q<sub>cond</sub>', 'U·A·(T<sub>out</sub> − T<sub>in</sub>) (glazing conduction)', `≈ 1,8·27·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.gCond)) },
+    { g: 'Air exchange', title: 'Ventilation with heat recovery', t0: hl, cam: 'air', proc: ['vent'], an: [], key: ['air'],
+      say: r => `Fresh air enters at ${f1(r.Tout)} °C, leaves the heat recovery at ${f1(r.Tmix)} °C, and the system brings it to the room.`,
+      eq: r => eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.hrSens)) + eq('Q<sub>OA</sub>', 'outdoor-air sensible load after recovery', '', Wf(r.oaSens)) },
+    { g: 'Air exchange', title: 'Infiltration', t0: hl, cam: 'glassIn', proc: ['infil'], an: [], key: ['air'],
+      say: r => `Leaks around the façade let outdoor air in with no recovery.`,
+      eq: r => eq('Q<sub>inf</sub>', 'ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>)', `1,2·${f3(r.infFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.infil)) },
+    { g: 'Balance', title: 'The air heat balance', t0: hl, cam: 'overview', proc: ['system', 'convSurf', 'convInternal', 'vent'], an: [], key: ['air'],
+      say: r => `Only what reaches the air counts now. The system ${r.loadS >= 0 ? 'removes' : 'adds'} exactly the rest to hold ${f1(r.Tair)} °C.`,
+      eq: r => `<div class="eq">${sym('Q')}<sub>surf</sub> + ${sym('Q')}<sub>int</sub> + ${sym('Q')}<sub>inf</sub> + ${sym('Q')}<sub>sys</sub> + ${sym('Q')}<sub>store</sub> ≈ 0 ${tag('ep')}<br><span class="num">&nbsp;&nbsp;${f0(r.surfConv)} + ${f0(r.intConv)} + ${f0(r.oaTransfer)} + ${f0(r.sysConv)} + ${f0(r.airStore)}</span></div>` +
+        eq('Q<sub>load</sub>', 'sensible load on the system', '', kW(r.loadS)) + eq('Q<sub>lat</sub>', 'latent load', '', kW(r.loadL)) },
+    { g: 'Balance', title: 'Heat gain is not cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'],
+      say: r => `Radiant gains go into surfaces and mass first and reach the air later, so the load curve is lower and later than the gain curve.`,
+      eq: r => dayChart(x => x.Qtr + x.pplSens + x.litVis + x.litRad + x.litConv + x.eqRad + x.eqConv, x => x.loadS, 'heat gain (sun + internal)', 'sensible load') },
+  ];
+}
+const peakOf = (f, abs = true) => argmax(r => abs ? Math.abs(f(r)) : f(r));
+// every element, and every process it takes part in, in the order energy flows through it
+function surfaceSequence(k, cam) {
+  const nm = NAME[k], lo = nm.toLowerCase(), out = [], has = f => peakOf(f) >= 0 && Math.abs(f(row(Math.round(peakOf(f) * 20)))) > 20;
+  const S_ = f => r => f(r.S[k]);
+  const cond = k === 'Suelo' ? 'floorCond' : k === 'Glass' ? 'glassCond' : ['wallCond', [k]];
+  if (has(S_(s => s.sol))) out.push({ title: 'Sun absorbed', t0: peakOf(S_(s => s.sol)), proc: [k === 'Suelo' ? 'sunPatch' : ['sunOn', [k]]], key: ['sun'], hl: 'sol',
+    say: r => `Short-wave light lands on the ${lo} and turns into heat at its face.`,
+    eq: r => eq('q<sub>sun</sub>', 'Q<sub>sun</sub> / A', `${f0(r.S[k].sol)} W / ${AREA[k]} m²`, `${f1(r.S[k].sol / AREA[k])} W/m²`) });
+  out.push({ title: 'Radiation from people, lights and equipment', t0: peakOf(S_(s => s.ir)), proc: [['intRadOn', [k]]], key: ['lw'], hl: 'ir',
+    say: r => `The radiant share of the internal gains lands on the ${lo}.`,
+    eq: r => eq('Q<sub>int,rad</sub>', 'share of (people + lights + equipment) radiant', `${f0(r.pplRad + r.litRad + r.litVis + r.eqRad)} W in the room`, Wf(r.S[k].ir)) });
+  out.push({ title: 'Long-wave exchange', t0: peakOf(S_(s => s.lw)), proc: [['lwNet', [k]]], key: ['lw'], hl: 'lw',
+    say: r => r.S[k].lw >= 0 ? `The ${lo} is cooler than what surrounds it, so it receives net heat radiation.` : `The ${lo} is warmer than what surrounds it, so it radiates net heat to the colder surfaces.`,
+    eq: r => eq('q<sub>lw</sub>', 'ε·σ·(T<sub>mrt</sub>⁴ − T<sub>s</sub>⁴)', `0,9·5,67·10⁻⁸·(${f1(r.MRT + 273.15)}⁴ − ${f1(r.S[k].T + 273.15)}⁴)`, `${f0(.9 * SIGMA * ((r.MRT + 273.15) ** 4 - (r.S[k].T + 273.15) ** 4))} W/m²`, 'est') +
+      eq('Q<sub>lw</sub>', 'net long-wave on the face', '', Wf(r.S[k].lw)) });
+  out.push({ title: 'Convection with the air', t0: peakOf(S_(s => s.conv)), proc: [['convSurf', [k]]], key: ['air'], hl: 'conv',
+    say: r => r.S[k].conv <= 0 ? `The ${lo} is warmer than the air: the air touching it heats and rises.` : `The ${lo} is colder than the air: the air touching it cools and sinks.`,
+    eq: r => { const s = r.S[k], dT = s.T - r.Tair; return eq('h<sub>c</sub>', '−Q<sub>conv</sub> / (A·(T<sub>s</sub> − T<sub>air</sub>))', `${f0(-s.conv)} / (${AREA[k]}·${f2(dT)})`, `${Math.abs(dT) > .05 ? f2(-s.conv / (AREA[k] * dT)) : '—'} W/m²K`) + eq('Q<sub>conv</sub>', 'to the air', '', Wf(-s.conv)); } });
+  out.push({ title: k === 'Glass' ? 'Conduction through the glazing' : 'Conduction into the construction', t0: k === 'Glass' ? peakOf(r => r.gCond) : peakOf(S_(s => s.cond)), proc: [cond], key: ['ink'], hl: k === 'Glass' ? null : 'cond',
+    say: r => k === 'Glass' ? (r.gCond > 0 ? `Outdoors is warmer: heat crosses the glazing inwards.` : `Outdoors is colder: heat leaks out through the glazing.`) : (r.S[k].cond < 0 ? `Heat flows from the face into the ${lo}'s mass.` : `The ${lo}'s mass gives heat back to its face.`),
+    eq: r => k === 'Glass' ? eq('Q<sub>cond</sub>', 'U·A·(T<sub>out</sub> − T<sub>in</sub>)', `≈ 1,8·27·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.gCond)) : eq('Q<sub>cond</sub>', 'inside-face conduction', '', Wf(r.S[k].cond)) });
+  if (k === 'Suelo') {
+    out.push({ title: 'Storage in the slab', t0: 8, t1: 18, proc: ['floorCond'], key: ['ink'], hl: 'cond', cam: 'cut', an: ['cut'],
+      say: r => `The slab warms a fraction of a degree over ${f0(CONC_T)} t of concrete: energy gained by the room that the air has not felt yet.`,
+      eq: r => eq('Q<sub>st</sub>', `A·Σ ρ·c·Δx·dT/dt (${N_NODES} nodes)`, '', Wf(r.Qst)) });
+    out.push({ title: 'Release after sunset', t0: 18, t1: 23.95, proc: ['floorCond', ['convSurf', ['Suelo']]], key: ['ink', 'air'], hl: 'cond',
+      say: r => r.S.Suelo.cond > 0 ? `No sun now: the slab gives its heat back up and the floor passes it to the air.` : `The slab is still taking heat in.`,
+      eq: r => eq('Q<sub>cond</sub>', 'out of the slab', '', Wf(r.S.Suelo.cond)) + eq('Q<sub>conv</sub>', 'floor → air', '', Wf(-r.S.Suelo.conv)) });
+  }
+  if (k === 'Glass') {
+    out.unshift({ title: 'Reflected, absorbed, transmitted', t0: peakOf(r => r.Qinc), proc: ['glassSplit'], key: ['sun'], an: ['split'],
+      say: r => `Each ray is reflected, absorbed in the panes or transmitted; the shares drawn are this time step's ρ, α and τ.`,
+      eq: r => `<div class="eq"><span class="lhs"></span><span class="rhs">${sym('ρ')} + ${sym('α')} + ${sym('τ')} = ${f2(r.Qref / Math.max(1, r.Qinc))} + ${f2(r.Qabs / Math.max(1, r.Qinc))} + ${f2(r.Qtr / Math.max(1, r.Qinc))}</div>` + eq('Q<sub>α</sub>', 'absorbed in both panes', '', kW(r.Qabs)) });
+    out.unshift({ title: 'Incident solar on the glazing', t0: peakOf(r => r.Qinc), proc: ['sunIn'], key: ['sun'], an: ['angle'], cam: 'glassOut',
+      say: r => `Parallel beam radiation reaches the curtain wall at incidence angle θ to its normal.`,
+      eq: r => eq('Q<sub>inc</sub>', 'I<sub>inc</sub>·A<sub>g</sub>', `${f0(r.Iinc)}·${AG} m²`, kW(r.Qinc)) });
+    out.splice(out.findIndex(x => x.title === 'Sun absorbed'), out.some(x => x.title === 'Sun absorbed') ? 1 : 0);
+  }
+  out.push({ title: 'All together: the face balance', t0: peakOf(r => r.Qinc), proc: [k === 'Suelo' ? 'sunPatch' : ['sunOn', [k]], ['intRadOn', [k]], ['lwNet', [k]], ['convSurf', [k]], cond], key: ['sun', 'lw', 'air', 'ink'], hl: null,
+    say: r => `Everything at the ${lo}'s face at once. The five terms add up to zero.`, eq: r => eq('Σ', 'sun + internal radiation + long-wave + convection + conduction', '', `${f0(r.S[k].sol + r.S[k].ir + r.S[k].lw + r.S[k].conv + r.S[k].cond)} W`) });
+  return out.map(x => ({ g: nm, cam: x.cam || cam, an: x.an || ['temps'], ...x, k }));
+}
+const ELEMENTS = {
+  Glass: () => surfaceSequence('Glass', 'glassIn'),
+  Suelo: () => surfaceSequence('Suelo', 'floorEl'),
+  Muro_N: () => surfaceSequence('Muro_N', 'wallN'), Muro_E: () => surfaceSequence('Muro_E', 'wallE'),
+  Muro_W: () => surfaceSequence('Muro_W', 'wallW'), Muro_S: () => surfaceSequence('Muro_S', 'wallS'),
+  Cubierta: () => surfaceSequence('Cubierta', 'ceil'),
+  people: () => { const ho = argmax(r => r.occ * 1000 - Math.abs(r.i / 20 - 18)), g = 'People';
+    return [
+      { g, title: 'Radiation from each body', t0: ho, cam: 'people', proc: ['lwPeople'], an: ['people'], key: ['lw'], say: r => `Every body radiates in all directions to the cooler surfaces around it.`,
+        eq: r => eq('Q<sub>rad</sub>', 'n·f<sub>rad</sub>·Q<sub>sens</sub>', `${f0(r.occ)}·0,30·${f0(r.pplSens / Math.max(1, r.occ))} W`, Wf(r.pplRad)) },
+      { g, title: 'Convection to the air', t0: ho, cam: 'people', proc: [['convInternal', ['people']]], an: [], key: ['air'], say: r => `Warm air rises from every body: it heats the room air at once.`,
+        eq: r => eq('Q<sub>conv</sub>', 'n·f<sub>conv</sub>·Q<sub>sens</sub>', `${f0(r.occ)}·0,70·${f0(r.pplSens / Math.max(1, r.occ))} W`, Wf(r.pplConv)) },
+      { g, title: 'Moisture', t0: ho, cam: 'person', proc: ['vapour'], an: ['people'], key: ['vap'], say: r => `Breath and skin add water vapour, a latent load.`,
+        eq: r => eq('ṁ<sub>w</sub>', 'Q<sub>lat</sub> / h<sub>fg</sub>', `${f0(r.pplLat)} W / 2.454 kJ/kg`, `${f2(r.pplLat / 2454e3 * 3600)} kg/h`) },
+      { g, title: 'All together', t0: ho, cam: 'people', proc: ['lwPeople', ['convInternal', ['people']], 'vapour'], an: ['people'], key: ['lw', 'air', 'vap'], say: r => `Sensible heat by radiation and convection, plus moisture.`,
+        eq: r => eq('Q', 'Q<sub>rad</sub> + Q<sub>conv</sub> + Q<sub>lat</sub>', `${f0(r.pplRad)} + ${f0(r.pplConv)} + ${f0(r.pplLat)}`, Wf(r.pplRad + r.pplConv + r.pplLat)) },
+    ]; },
+  lights: () => { const g = 'Lights', t0 = 21;
+    return [
+      { g, title: 'Visible light', t0, cam: 'lights', proc: ['visible'], an: [], key: ['sun'], say: r => `Light lands on surfaces, where it becomes heat.`, eq: r => eq('Q<sub>vis</sub>', 'f<sub>vis</sub>·P', '', Wf(r.litVis)) },
+      { g, title: 'Heat radiation', t0, cam: 'lights', proc: ['lwLights'], an: [], key: ['lw'], say: r => `The lamps radiate heat down to the surfaces.`, eq: r => eq('Q<sub>rad</sub>', 'f<sub>rad</sub>·P', '', Wf(r.litRad)) },
+      { g, title: 'Convection', t0, cam: 'lights', proc: [['convInternal', ['lights']]], an: [], key: ['air'], say: r => `A small share warms the air at the ceiling.`, eq: r => eq('Q<sub>conv</sub>', 'f<sub>conv</sub>·P', '', Wf(r.litConv)) },
+      { g, title: 'All together', t0, cam: 'lights', proc: ['visible', 'lwLights', ['convInternal', ['lights']]], an: [], key: ['sun', 'lw', 'air'], say: r => `The lamp's power, split.`,
+        eq: r => eq('P', 'Q<sub>vis</sub> + Q<sub>rad</sub> + Q<sub>conv</sub> + Q<sub>ret</sub>', `${f0(r.litVis)} + ${f0(r.litRad)} + ${f0(r.litConv)} + ${f0(r.litRet)}`, Wf(r.litVis + r.litRad + r.litConv + r.litRet)) },
+    ]; },
+  equip: () => { const g = 'Equipment', t0 = 21;
+    return [
+      { g, title: 'Heat radiation', t0, cam: 'equip', proc: ['lwEquip'], an: [], key: ['lw'], say: r => `Half the power is radiated to the surfaces around.`, eq: r => eq('Q<sub>rad</sub>', 'f<sub>rad</sub>·P', '', Wf(r.eqRad)) },
+      { g, title: 'Convection', t0, cam: 'equip', proc: [['convInternal', ['equip']]], an: [], key: ['air'], say: r => `The other half goes straight into the air.`, eq: r => eq('Q<sub>conv</sub>', 'f<sub>conv</sub>·P', '', Wf(r.eqConv)) },
+    ]; },
+  air: () => { const g = 'Outdoor air', hl = SB[season].peak_step / 20;
+    return [
+      { g, title: 'Ventilation through the heat recovery', t0: hl, cam: 'air', proc: ['vent'], an: [], key: ['air'], say: r => `Fresh air at ${f1(r.Tout)} °C leaves the recovery at ${f1(r.Tmix)} °C.`,
+        eq: r => eq('Q<sub>rec</sub>', 'ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>mix</sub>)', `1,2·${f3(r.oaFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tmix)})`, Wf(r.hrSens)) + eq('Q<sub>OA</sub>', 'after recovery', '', Wf(r.oaSens)) },
+      { g, title: 'Infiltration', t0: hl, cam: 'glassIn', proc: ['infil'], an: [], key: ['air'], say: r => `Leaks around the façade, with no recovery.`,
+        eq: r => eq('Q<sub>inf</sub>', 'ρ·V̇·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>)', `1,2·${f3(r.infFlow)}·1.006·(${f1(r.Tout)} − ${f1(r.Tair)})`, Wf(r.infil)) },
+    ]; },
+  system: () => { const g = 'Room air and system', hl = SB[season].peak_step / 20;
+    return [
+      { g, title: 'The air heat balance', t0: hl, cam: 'overview', proc: ['system', 'convSurf', 'convInternal', 'vent'], an: [], key: ['air'], say: r => `The air collects every convective part; the system ${r.loadS >= 0 ? 'removes' : 'adds'} the rest.`,
+        eq: r => `<div class="eq">${sym('Q')}<sub>surf</sub> + ${sym('Q')}<sub>int</sub> + ${sym('Q')}<sub>inf</sub> + ${sym('Q')}<sub>sys</sub> + ${sym('Q')}<sub>store</sub> ≈ 0<br><span class="num">&nbsp;&nbsp;${f0(r.surfConv)} + ${f0(r.intConv)} + ${f0(r.oaTransfer)} + ${f0(r.sysConv)} + ${f0(r.airStore)}</span></div>` + eq('Q<sub>load</sub>', 'sensible', '', kW(r.loadS)) + eq('Q<sub>lat</sub>', 'latent', '', kW(r.loadL)) },
+      { g, title: 'Heat gain is not cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'], say: r => `Radiant gains reach the air later, through the surfaces.`,
+        eq: r => dayChart(x => x.Qtr + x.pplSens + x.litVis + x.litRad + x.litConv + x.eqRad + x.eqConv, x => x.loadS, 'heat gain', 'sensible load') },
+    ]; },
+  sky: () => [{ g: 'Sun and sky', title: 'The sun\'s path', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'], say: r => `This day's sun path and the rays it sends through the glazing.`,
+    eq: r => eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) + eq('T<sub>out</sub>', 'outdoor dry-bulb temperature', '', `${f1(r.Tout)} °C`) }],
+};
+const ELEMENT_NAMES = { Glass: 'Glazing', Suelo: 'Floor and slab', Muro_N: 'North wall', Muro_E: 'East wall', Muro_W: 'West wall', Muro_S: 'South wall', Cubierta: 'Roof (ceiling)', people: 'People', lights: 'Lights', equip: 'Equipment', air: 'Outdoor air', system: 'Room air and system', sky: 'Sun and sky' };
+let elementPick = 'Suelo';
+function elementSteps() { return elementPick === 'all' ? Object.values(ELEMENTS).flatMap(f => f()) : ELEMENTS[elementPick](); }
+
+function focusOf(step) {
+  const F = new Set(), ALL = ['Suelo', 'Muro_N', 'Muro_S', 'Muro_E', 'Muro_W', 'Glass'];
+  for (const e of step.proc) {
+    const [nm, only] = Array.isArray(e) ? e : [e, null], r = S.r || row(Math.floor(step.t0 * 20));
+    if ((nm === 'lwNet' || nm === 'convSurf') && !only) F.add('Cubierta');
+    if (nm === 'sunPatch') F.add('Suelo');
+    if (['sunIn', 'glassSplit', 'glassCond'].includes(nm)) { F.add('Glass'); if (nm === 'sunIn') F.add('Suelo'); }
+    if (nm === 'floorCond') { F.add('Suelo'); F.add('slab'); }
+    if (nm === 'lwNet' || nm === 'convSurf') (only || ALL).forEach(k => F.add(k));
+    if (nm === 'lwNet' && only) {   // the partners of that surface in the exchange take part too
+      const q = r.S[only[0]].lw; [...ALL, 'Cubierta'].forEach(k => { if (k !== only[0] && Math.sign(r.S[k].lw) === -Math.sign(q) && Math.abs(r.S[k].lw) > 15) F.add(k); });
+    }
+    if (nm === 'wallCond') (only || ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W']).forEach(k => F.add(k));
+    if (['lwPeople', 'vapour'].includes(nm) || (nm === 'convInternal' && (!only || only.includes('people')))) F.add('people');
+    if (['lwLights', 'visible'].includes(nm) || (nm === 'convInternal' && (!only || only.includes('lights')))) F.add('lamps');
+    if (nm === 'lwEquip' || (nm === 'convInternal' && (!only || only.includes('equip')))) F.add('equip');
+    if (nm === 'lwPeople') F.add('Suelo');
+    if (nm === 'intRadOn') { F.add(only[0]); F.add('people'); F.add('lamps'); F.add('equip'); }   // sunOn keeps the surface white: the light shading carries it
+  }
+  return F;
+}
+const CONCEPTS = [
+  { k: 'solar', name: 'Solar gain through glazing', def: 'How much sun the glazing lets in, and where in the room it lands.',
+    titles: ["The sun's path", 'Incident solar on the glazing', 'Reflected, absorbed, transmitted', 'Direct sun on the floor'] },
+  { k: 'mass', name: 'Thermal mass and time lag', def: 'Heat absorbed by heavy materials reaches the air hours later.',
+    titles: ['Light becomes heat', 'Conduction into the slab', 'Storage in the mass', 'Release when the sun has gone'] },
+  { k: 'radconv', name: 'Radiant vs convective', def: 'Radiant heat warms surfaces first; convective heat warms the air at once.',
+    titles: ['People radiate', 'Lights radiate', 'Equipment radiates', 'People, lights and equipment heat the air'] },
+  { k: 'lw', name: 'Long-wave exchange', def: 'Every surface radiates as T⁴; net heat flows from hotter to colder surfaces.',
+    titles: ['Surfaces exchange heat radiation', 'Surfaces heat (or cool) the air'] },
+  { k: 'latent', name: 'Sensible and latent', def: 'Sensible heat changes the air temperature; latent heat is moisture to condense out.',
+    titles: ['People release moisture', 'The air heat balance'] },
+  { k: 'oa', name: 'Outdoor air and heat recovery', def: 'Air and conduction exchange heat with outdoors; recovery takes part of it back.',
+    titles: ['Conduction through the glass', 'Ventilation with heat recovery', 'Infiltration'] },
+  { k: 'load', name: 'Heat gain vs cooling load', def: 'Not every watt that enters the room is load right now.',
+    titles: ['Where the floor sends its heat', 'The air heat balance', 'Heat gain is not cooling load'] },
+];
+let conceptPick = 'solar';
+function conceptSteps(k = conceptPick) { const all = processSteps(), c = CONCEPTS.find(x => x.k === k); return c.titles.map(t => all.find(st => st.title === t)).filter(Boolean).map(st => ({ ...st, g: c.name })); }
+function makeSteps() { if (sortMode === 'concept') return conceptSteps(); return sortMode === 'element' ? elementSteps() : processSteps(); }
+
+function patchT(r) { const s = r.S.Suelo; if (!LIT.length) return s.T; const A = LIT.length * CELL * CELL, qp = (s.sol * clamp(r.Qbeam / Math.max(1, r.Qtr))) / A, qm = s.sol / 96; return s.T + (qp - qm) / 16; }
+
+// ================================================================ 2D sections (concepts): real layers, simulated temperatures and flows
+const MAT_EN = [['Baldosa ceramica', 'Ceramic tile'], ['Mortero de agarre', 'Bedding mortar'], ['Losa de hormigon', 'Concrete slab'], ['XPS bajo losa', 'XPS insulation'],
+  ['Mortero monocapa', 'Render'], ['Lana mineral muro', 'Mineral wool'], ['Hormigon armado', 'Reinforced concrete'], ['Enlucido de yeso', 'Gypsum plaster'],
+  ['Lamina impermeabilizante', 'Membrane'], ['PIR cubierta', 'PIR insulation'], ['Tablero OSB', 'OSB board']];
+const matName = m => { const t = m.replace('Terminal ', ''); for (const [es, en] of MAT_EN) if (t.startsWith(es)) return en + t.slice(es.length); return t; };
+const matFill = m => /XPS|Lana|PIR/.test(m) ? 'url(#hInsul)' : /hormigon|Hormigon/.test(m) ? 'url(#hConc)' : /Baldosa/.test(m) ? '#d8d1c4' : '#e6e1d8';
+const SEC_DEFS = `<defs>
+  <pattern id="hConc" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#dcd6cb"/><circle cx="2" cy="2" r=".8" fill="#a59e92"/><circle cx="5.5" cy="5" r=".6" fill="#b6afa3"/></pattern>
+  <pattern id="hInsul" width="10" height="6" patternUnits="userSpaceOnUse"><rect width="10" height="6" fill="#f1eef6"/><path d="M0 3 Q2.5 0 5 3 T10 3" fill="none" stroke="#b9b0cc" stroke-width=".8"/></pattern>
+  <marker id="aw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" fill="context-stroke"/></marker></defs>`;
+const svgArrow = (x1, y1, x2, y2, c, w = 2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" marker-end="url(#aw)"/>`;
+const svgWave = (x1, y1, x2, y2, c) => { const n = 24, pts = []; const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+  for (let i = 0; i <= n; i++) { const u = i / n, a = Math.sin(u * Math.PI * 6) * 3 * (u < .85 ? 1 : (1 - u) / .15); pts.push(`${(x1 + dx * u + nx * a).toFixed(1)},${(y1 + dy * u + ny * a).toFixed(1)}`); }
+  return `<polyline points="${pts.join(' ')}" fill="none" stroke="${c}" stroke-width="1.8"/>${svgArrow(x2 - dx * .06, y2 - dy * .06, x2, y2, c, 1.8)}`; };
+const tx = (x, y, t, o = '') => `<text x="${x}" y="${y}" ${o}>${t}</text>`;
+const SC = { sun: '#d99a00', lw: '#7b2fd0', conv: '#ef7d00', cond: '#e3170a', ink: '#1b1b1b' };
+
+function secFloor(r) {   // horizontal slab: inside face on top, layers to scale, CondFD temperature profile drawn across it
+  const Wd = 410, Hd = 206, x0 = 16, x1 = 250, y0 = 66, depth = 110, layers = [...floorCons.layers].reverse(), tot = floorCons.thickness, ys = depth / tot;
+  let y = y0, out = SEC_DEFS;
+  for (const l of layers) { const h = l.thickness * ys; out += `<rect x="${x0}" y="${y.toFixed(1)}" width="${x1 - x0}" height="${h.toFixed(1)}" fill="${matFill(l.material)}" stroke="#8f887c" stroke-width=".6"/>`;
+    out += tx(x1 + 6, y + h / 2 + 3.5, `${matName(l.material)}`, 'font-size="10" fill="#6e6b66"'); y += h; }
+  const Tn = r.fT, xs = r.fx, lo = Math.min(...Tn) - .4, hi = Math.max(...Tn) + .4, X = T => x0 + 12 + (T - lo) / (hi - lo) * (x1 - x0 - 24);
+  const pts = Tn.map((T, j) => `${X(T).toFixed(1)},${(y0 + (tot - xs[j]) * ys).toFixed(1)}`).join(' ');
+  out += `<polyline points="${pts}" fill="none" stroke="${SC.cond}" stroke-width="2"/>` + Tn.map((T, j) => `<circle cx="${X(T).toFixed(1)}" cy="${(y0 + (tot - xs[j]) * ys).toFixed(1)}" r="1.8" fill="${SC.cond}"/>`).join('');
+  out += tx(X(Tn[Tn.length - 1]) + 5, y0 + 11, `${f1(Tn[Tn.length - 1])} °C`, `font-size="10.5" fill="${SC.cond}" font-weight="600"`) + tx(X(Tn[0]) + 5, y0 + depth - 3, `${f1(Tn[0])} °C`, `font-size="10.5" fill="${SC.cond}" font-weight="600"`);
+  const s_ = r.S.Suelo, A = 96;
+  const lab = (x, t1, t2, c) => tx(x + 7, 24, t1, `font-size="10" fill="${c}"`) + tx(x + 7, 36, t2, `font-size="10.5" font-weight="600" fill="${c}"`);
+  if (s_.sol > 5) out += svgArrow(26, 8, 26, y0 - 3, SC.sun) + lab(26, 'sun', `${f0(s_.sol / A)} W/m²`, SC.sun);
+  out += (s_.lw >= 0 ? svgWave(104, 10, 104, y0 - 3, SC.lw) : svgWave(104, y0 - 3, 104, 10, SC.lw)) + lab(104, 'long-wave', `${f0(s_.lw / A)} W/m²`, SC.lw);
+  out += (s_.conv <= 0 ? svgArrow(184, y0 - 3, 184, 10, SC.conv) : svgArrow(184, 10, 184, y0 - 3, SC.conv)) + lab(184, 'to the air', `${f0(-s_.conv / A)} W/m²`, SC.conv);
+  out += (s_.cond < 0 ? svgArrow(x1 - 18, y0 + 6, x1 - 18, y0 + depth - 6, SC.cond, 2.4) : svgArrow(x1 - 18, y0 + depth - 6, x1 - 18, y0 + 6, SC.cond, 2.4));
+  out += tx(x1 + 6, y0 + depth + 16, `conduction ${f0(Math.abs(s_.cond) / A)} W/m² ${s_.cond < 0 ? 'down' : 'up'}`, `font-size="10.5" fill="${SC.cond}"`);
+  out += tx(x0, y0 + depth + 16, 'ground side', 'font-size="10" fill="#9a958d"');
+  return `<svg width="${Wd}" height="${Hd}" style="display:block;font-family:'IBM Plex Sans'">${out}</svg>`;
+}
+function secWall(r, k = 'Muro_N') {   // vertical wall: outside left, inside right, layers to scale, CondFD profile
+  const Wd = 410, Hd = 196, x0 = 70, y0 = 30, hgt = 120, cons = SB.constructions[SB.face_construction[k]], tot = cons.thickness, wpx = 200, xs_ = wpx / tot;
+  let x = x0, out = SEC_DEFS;
+  cons.layers.forEach((l, j) => { const w = l.thickness * xs_; out += `<rect x="${x.toFixed(1)}" y="${y0}" width="${w.toFixed(1)}" height="${hgt}" fill="${matFill(l.material)}" stroke="#8f887c" stroke-width=".6"/>`;
+    out += `<text x="${(x + w / 2).toFixed(1)}" y="${y0 + hgt + 12 + (j % 2) * 11}" text-anchor="middle" font-size="9.5" fill="#6e6b66">${matName(l.material).replace(/ \d+mm$/, '')}</text>`; x += w; });
+  const N = SB[season].nodes[k], Tn = N.T.map(a => a[r.i]), lo = Math.min(...Tn) - .4, hi = Math.max(...Tn) + .4, Y = T => y0 + hgt - 10 - (T - lo) / (hi - lo) * (hgt - 20);
+  out += `<polyline points="${N.x.map((xx, j) => `${(x0 + xx * xs_).toFixed(1)},${Y(Tn[j]).toFixed(1)}`).join(' ')}" fill="none" stroke="${SC.cond}" stroke-width="2"/>`;
+  out += tx(x0 - 6, Y(Tn[0]) + 4, `${f1(Tn[0])} °C`, `text-anchor="end" font-size="10.5" fill="${SC.cond}" font-weight="600"`) + tx(x0 + wpx + 6, Y(Tn[Tn.length - 1]) + 4, `${f1(Tn[Tn.length - 1])} °C`, `font-size="10.5" fill="${SC.cond}" font-weight="600"`);
+  const s_ = r.S[k], A = AREA[k], xi = x0 + wpx, rows = [['sun', s_.sol, SC.sun], ['internal rad.', s_.ir, SC.lw], ['long-wave', s_.lw, SC.lw], ['air', s_.conv, SC.conv], ['into the wall', s_.cond, SC.cond]];
+  rows.forEach(([n, v, c], j) => { const yy = y0 + 12 + j * 23, into = (n === 'into the wall') ? v < 0 : v > 0;
+    out += n === 'long-wave' || n === 'internal rad.' ? (into ? svgWave(xi + 70, yy, xi + 4, yy, c) : svgWave(xi + 4, yy, xi + 70, yy, c)) : (n === 'into the wall' ? svgArrow(xi + 4, yy, xi - 30, yy, c, 2.4) : (into ? svgArrow(xi + 70, yy, xi + 4, yy, c) : svgArrow(xi + 4, yy, xi + 70, yy, c)));
+    out += tx(xi + 76, yy + 3.5, `${n} ${f0(Math.abs(n === 'into the wall' ? v : v) / A)}`, `font-size="10" fill="${c}"`); });
+  out += tx(x0 - 6, y0 - 8, 'outside', 'text-anchor="end" font-size="10" fill="#9a958d"') + tx(xi + 4, y0 - 8, 'room · W/m²', 'font-size="10" fill="#9a958d"');
+  return `<svg width="${Wd}" height="${Hd}" style="display:block;font-family:'IBM Plex Sans'">${out}</svg>`;
+}
+function secGlass(r) {   // double glazing: outside left, two panes and the cavity, solar split and temperatures
+  const Wd = 410, Hd = 180, gx = 180, y0 = 24, h = 120, pane = 9, cav = 24;
+  let out = SEC_DEFS + `<rect x="${gx}" y="${y0}" width="${pane}" height="${h}" fill="#cfe0f0" stroke="#7d93a8"/><rect x="${gx + pane + cav}" y="${y0}" width="${pane}" height="${h}" fill="#cfe0f0" stroke="#7d93a8"/>`;
+  const glow = clamp(r.Qabs / 6000); out += `<rect x="${gx}" y="${y0}" width="${pane * 2 + cav}" height="${h}" fill="${SC.cond}" opacity="${(glow * .35).toFixed(2)}"/>`;
+  const gR = gx + pane * 2 + cav;
+  out += svgArrow(30, 34, gx - 2, 70, SC.sun, 2.6) + tx(20, 26, `incident ${kW(r.Qinc)}`, `font-size="10.5" fill="${SC.sun}" font-weight="600"`);
+  out += svgArrow(gx - 2, 76, 40, 108, '#9a958d', 1.8) + tx(20, 124, `reflected ${kW(r.Qref)}`, 'font-size="10.5" fill="#6e6b66"');
+  out += svgArrow(gR + 2, 76, Wd - 30, 112, SC.sun, 2.6) + tx(gR + 30, 128, `transmitted ${kW(r.Qtr)}`, `font-size="10.5" fill="${SC.sun}" font-weight="600"`);
+  out += tx(gx + pane + cav / 2, y0 + h + 14, `absorbed ${kW(r.Qabs)}`, `text-anchor="middle" font-size="10.5" fill="${SC.cond}"`);
+  out += tx(gx - 4, y0 + 10, `${f1(r.TgOut)} °C`, 'text-anchor="end" font-size="10.5" fill="#1b1b1b"') + tx(gR + 4, y0 + 10, `${f1(r.TgIn)} °C`, 'font-size="10.5" fill="#1b1b1b"');
+  out += (r.gCond > 0 ? svgArrow(gx - 40, y0 + 55, gR + 40, y0 + 55, SC.cond, 1.6) : svgArrow(gR + 40, y0 + 55, gx - 40, y0 + 55, SC.cond, 1.6));
+  out += tx(gR + 44, y0 + 58, `conduction ${f0(Math.abs(r.gCond))} W`, `font-size="10" fill="${SC.cond}"`);
+  out += tx(gx - 4, y0 + h + 30, 'outside', 'text-anchor="end" font-size="10" fill="#9a958d"') + tx(gR + 4, y0 + h + 30, 'room', 'font-size="10" fill="#9a958d"');
+  return `<svg width="${Wd}" height="${Hd}" style="display:block;font-family:'IBM Plex Sans'">${out}</svg>`;
+}
+const SECTION_OF = {
+  'Incident solar on the glazing': 'glass', 'Reflected, absorbed, transmitted': 'glass', 'Conduction through the glass': 'glass',
+  'Direct sun on the floor': 'floor', 'Light becomes heat': 'floor', 'Conduction into the slab': 'floor', 'Storage in the mass': 'floor', 'Release when the sun has gone': 'floor',
+  'Where the floor sends its heat': 'floor', 'Heat gain is not cooling load': 'floor',
+  'People radiate': 'wall', 'Lights radiate': 'wall', 'Equipment radiates': 'wall', 'Surfaces exchange heat radiation': 'wall', 'Surfaces heat (or cool) the air': 'wall',
+};
+function sectionFor(st, r) {
+  const k = SECTION_OF[st.title]; if (!k) return '';
+  const svg = k === 'glass' ? secGlass(r) : k === 'floor' ? secFloor(r) : secWall(r, 'Muro_N');
+  const name = k === 'glass' ? 'Section · double glazing' : k === 'floor' ? 'Section · floor slab' : 'Section · north wall';
+  return `<div class="sect">${name}</div><div class="chart">${svg}</div>`;
+}
+
+// ================================================================ UI
+const $ = id => document.getElementById(id);
+let sortMode = 'process';
+let steps = makeSteps(), cur = 0, playing = true, t = 13, stepClock = 0, from = null, cardKey = '';
+const ico = id => `<svg class="i"><use href="#${id}"/></svg>`;
+const ELEMENT_CATS = [
+  ['Sun and sky', ['sky']],
+  ['Envelope', ['Glass', { name: 'Walls', keys: ['Muro_N', 'Muro_E', 'Muro_S', 'Muro_W'] }, 'Suelo', 'Cubierta']],
+  ['Internal gains', ['people', 'lights', 'equip']],
+  ['Air and system', ['air', 'system']],
+];
+let wallsOpen = false;
+const EL_N = {};
+function stepBtn(s, i) { return `<button class="s${i === cur ? ' on' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span>${s.title}</span></button>`; }
+function renderList() {
+  let html = '';
+  if (sortMode === 'process') {
+    let g = ''; steps.forEach((s, i) => { if (s.g !== g) { g = s.g; html += `<div class="g">${g}</div>`; } html += stepBtn(s, i); });
+  } else if (sortMode === 'concept') {
+    for (const c of CONCEPTS) {
+      const open = c.k === conceptPick;
+      html += `<button class="el cpt${open ? ' open' : ''}" data-c="${c.k}">${ico('i-right')}<span>${c.name}</span><span class="c">${c.titles.length}</span></button>`;
+      if (open) html += `<p class="cdef">${c.def}</p><div class="sub">${steps.map(stepBtn).join('')}</div>`;
+    }
+  } else {
+    const elRow = k => { const open = k === elementPick, n = open ? steps.length : (EL_N[season + k] ??= ELEMENTS[k]().length);
+      return `<button class="el${open ? ' open' : ''}" data-k="${k}">${ico('i-right')}<span>${ELEMENT_NAMES[k]}</span><span class="c">${n}</span></button>` + (open ? `<div class="sub">${steps.map(stepBtn).join('')}</div>` : ''); };
+    for (const [cat, items] of ELEMENT_CATS) {
+      html += `<div class="g">${cat}</div>`;
+      for (const it of items) {
+        if (typeof it === 'string') { html += elRow(it); continue; }
+        const open = wallsOpen || it.keys.includes(elementPick);
+        html += `<button class="el grp-row${open ? ' open' : ''}" data-grp="${it.name}">${ico('i-right')}<span>${it.name}</span><span class="c">${it.keys.length}</span></button>`;
+        if (open) html += `<div class="sub nest">${it.keys.map(elRow).join('')}</div>`;
+      }
+    }
+  }
+  $('steps').innerHTML = html;
+  $('steps').querySelectorAll('.s').forEach(el => el.onclick = () => go(+el.dataset.i));
+  $('steps').querySelectorAll('.el[data-c]').forEach(el => el.onclick = () => { conceptPick = el.dataset.c; steps = makeSteps(); go(0); });
+  $('steps').querySelectorAll('.el[data-k]').forEach(el => el.onclick = () => { elementPick = el.dataset.k; steps = makeSteps(); go(0); });
+  $('steps').querySelectorAll('.el[data-grp]').forEach(el => el.onclick = () => { wallsOpen = !el.classList.contains('open'); if (!wallsOpen && ELEMENT_CATS[1][1][1].keys.includes(elementPick)) wallsOpen = false; renderList(); });
+  $('steps').querySelector('.s.on')?.scrollIntoView({ block: 'nearest' });
+}
+function go(i) {
+  cur = (i + steps.length) % steps.length; stepClock = 0; from = { p: camera.position.clone(), t: controls.target.clone() };
+  const s = steps[cur]; t = s.t0; cardKey = ''; renderList();
+  $('cT').textContent = s.title; $('cCount').textContent = `${cur + 1} / ${steps.length}`;
+  $('railPos').textContent = `${cur + 1} / ${steps.length}`;
+}
+function setSeg(id, attr, val) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); }
+$('modeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; sortMode = b.dataset.mode; setSeg('modeSeg', 'mode', sortMode); steps = makeSteps(); go(0); };
+$('seasonSeg').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.s === season) return; season = b.dataset.s; setSeg('seasonSeg', 's', season); steps = makeSteps(); go(Math.min(cur, steps.length - 1)); };
+$('prev').onclick = () => go(cur - 1); $('next').onclick = () => go(cur + 1);
+$('fold').onclick = () => { const f = $('card').classList.toggle('folded'); $('fold').innerHTML = ico(f ? 'i-plus' : 'i-minus'); $('fold').setAttribute('aria-label', f ? 'Unfold the panel' : 'Fold the panel'); resize(); };
+const toggleFull = () => { document.body.classList.toggle('clean'); resize(); };
+const toggleNav = () => { document.body.classList.toggle('navclosed'); resize(); };
+$('navClose').onclick = toggleNav; $('navOpen').onclick = toggleNav;
+$('full').onclick = toggleFull;
+const setPlaying = p => { playing = p; $('playIcon').innerHTML = `<use href="#${p ? 'i-pause' : 'i-play'}"/>`; $('play').setAttribute('aria-label', p ? 'Pause' : 'Play'); };
+$('play').onclick = () => setPlaying(!playing);
+$('range').oninput = e => { t = +e.target.value; setPlaying(false); cardKey = ''; };
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') go(cur + 1); if (e.key === 'ArrowLeft') go(cur - 1);
+  if (e.key === 'f' || e.key === 'F') toggleFull(); if (e.key === 'l' || e.key === 'L') toggleNav();
+  if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); }
+});
+controls.addEventListener('start', () => from = null);
+// what enters the room, and what it adds to the load (all simulation outputs)
+let balMode = 'step';
+const BAL_ROWS = [
+  ['Solar through the glazing', r => r.Qtr, '#d99a00'],
+  ['Conduction through the glazing', r => r.gCond, '#e3170a'],
+  ['Opaque envelope (− = into the mass)', r => ['Suelo', 'Muro_N', 'Muro_E', 'Muro_S', 'Muro_W', 'Cubierta'].reduce((a, k) => a + r.S[k].cond, 0), '#b2412f'],
+  ['People, sensible', r => r.pplSens, '#ef7d00'],
+  ['Lights', r => r.litVis + r.litRad + r.litConv + r.litRet, '#c9a227'],
+  ['Equipment', r => r.eqRad + r.eqConv, '#8a8a8a'],
+  ['Infiltration', r => r.infil, '#6f8fb0'],
+];
+const dayCache = {};
+function dayKWh(f, name = String(f)) { const k = season + '|' + name; return dayCache[k] ??= (() => { let s_ = 0; for (let i = 0; i < 480; i++) s_ += f(row(i)); return s_ * SB[season].step_min / 60 / 1000; })(); }
+function renderBalance(r) {
+  const day = balMode === 'day', dtH = SB[season].step_min / 60, val = f => day ? dayKWh(f) : f(r), fmt = v => day ? `${f1(v)} kWh` : `${f2(v / 1000)} kW`;
+  const fmtE = v => day ? '' : `<span style="color:var(--muted);font-weight:400"> · ${f0(v * dtH)} Wh</span>`;
+  const vals = BAL_ROWS.map(([n, f, c]) => [n, day ? dayKWh(f, n) : f(r), c, f]);
+  const gainS = vals.reduce((a, x) => a + x[1], 0), latG = val(x => x.pplLat), loadS = val(x => x.loadS), loadL = val(x => x.loadL), oaS = val(x => x.oaSens), oaL = val(x => x.oaLat);
+  const mx = Math.max(...vals.map(x => Math.abs(x[1])), Math.abs(loadS), 1);
+  const bar = (v, c) => { const w = Math.abs(v) / mx * 50; return `<span class="b"><i style="${v >= 0 ? `left:50%` : `right:50%`};width:${w}%;background:${c}"></i></span>`; };
+  const line = (n, v, c) => `<div class="row"><span class="n">${n}</span>${bar(v, c)}<span class="v">${fmt(v)}</span></div>`;
+  $('balBody').innerHTML =
+    `<p class="bnote">${day ? `Day total: sum of the ${480} time steps, rate × ${SB[season].step_min} min each.` : `Time step ${stepLabel(r.i)}: average rates over the interval; energy = rate × ${SB[season].step_min} min.`}</p>` +
+    `<div class="grp"><span>Heat entering the room · sensible</span></div>` + vals.map(([n, v, c]) => line(n, v, c)).join('') +
+    `<div class="tot"><span class="k">Room sensible load (sum)</span><span class="x big">${fmt(gainS)}</span>
+      <span class="k">simulated zone load</span><span class="x">${fmt(loadS)}${fmtE(loadS)}</span></div>` +
+    `<div class="grp"><span>Moisture</span></div>` + line('People, latent', latG, '#0f9fb0') +
+    `<div class="grp"><span>System</span></div>` + line('Room, sensible', loadS, '#2f6fc0') + line('Outdoor air after recovery', oaS, '#6f8fb0') +
+    `<div class="tot"><span class="k">System sensible load</span><span class="x big">${fmt(loadS + oaS)}</span>
+      <span class="k"></span><span class="x">${fmtE(loadS + oaS).replace(' · ', '')}</span>
+      <span class="k">System latent load (room + outdoor air)</span><span class="x">${fmt(loadL + oaL)}${fmtE(loadL + oaL)}</span></div>`;
+}
+// exterior and interior conditions at this time step: weather, room air, occupancy and every internal gain split by how it leaves its source
+const FLOOR_A = 96, ROOM_V = W * D * H, P_SITE = 101325 * Math.pow(1 - 2.25577e-5 * 263, 5.25588);   // Zaragoza, 263 m
+const psat = T => 610.94 * Math.exp(17.625 * T / (T + 243.04));                                        // Pa (Magnus)
+const rhOf = (T, w) => clamp(w * P_SITE / (.621945 + w) / psat(T), 0, 1.2);
+const GC = { rad: ['radiant', '#7b2fd0'], conv: ['convective', '#ef7d00'], vis: ['visible', '#d99a00'], lat: ['latent', '#0f9fb0'], ret: ['to return air', '#9a958d'] };
+const cst = (l, v, title = '') => `<div class="cst"${title ? ` title="${title}"` : ''}><div class="l">${l}</div><div class="v">${v}</div></div>`;
+function gainBlock(name, meta, parts) {
+  const tot = parts.reduce((a, [, v]) => a + Math.max(0, v), 0), vis = parts.filter(([, v]) => v > .5);
+  return `<div class="gsrc"><div class="sh"><span class="n">${name}</span><span class="m">${meta}</span><span class="v">${tot >= 1000 ? kW(tot) : Wf(tot)}</span></div>
+    <div class="stack">${tot > .5 ? vis.map(([k, v]) => `<i style="width:${(v / tot * 100).toFixed(2)}%;background:${GC[k][1]}"></i>`).join('') : ''}</div>
+    <div class="parts">${tot > .5 ? vis.map(([k, v]) => `<span class="d" style="background:${GC[k][1]}"></span><span>${GC[k][0]}</span><span class="p">${f0(v / tot * 100)} %</span><span class="w">${Wf(v)}</span>`).join('') : '<span></span><span style="color:var(--muted)">off at this time step</span>'}</div></div>`;
+}
+function renderConditions(r) {
+  $('condWhen').textContent = stepLabel(r.i);
+  const n = r.occ, perS = n > .05 ? r.pplSens / n : 0, perL = n > .05 ? r.pplLat / n : 0;
+  const lit = r.litVis + r.litRad + r.litConv + r.litRet, eqp = r.eqRad + r.eqConv;
+  const sens = r.pplSens + lit + eqp, rad = r.pplRad + r.litRad + r.litVis + r.eqRad;
+  const rhOut = rhOf(r.Tout, r.wOut), gk = w => f1(w * 1000);
+  $('condBody').innerHTML =
+    `<div class="cgrp">Outdoors</div><div class="cgrid">` +
+      cst('Dry-bulb temperature', `${f1(r.Tout)} °C`) +
+      cst('Humidity', `${gk(r.wOut)} g/kg <small>· ${f0(rhOut * 100)} %</small>`, 'Relative humidity derived from the humidity ratio at the site pressure') +
+      cst('Sky temperature', `${f1(r.Tsky)} °C`) +
+      cst('Sun', r.alt > 0 ? `${f0(r.alt)}° <small>alt</small> · ${f0(r.az)}° <small>az</small>` : `<small>below the horizon</small>`) +
+      cst('Direct normal', `${f0(r.DNI)} <small>W/m²</small>`) +
+      cst('Diffuse horizontal', `${f0(r.DHI)} <small>W/m²</small>`) +
+    `</div><div class="cgrp">Indoors</div><div class="cgrid">` +
+      cst('Air temperature', `${f1(r.Tair)} °C`) +
+      cst('Mean radiant', `${f1(r.MRT)} °C`) +
+      cst('Operative', `${f1(r.Top)} °C`) +
+      cst('Humidity', `${gk(r.wIn)} g/kg <small>· ${f0(r.RH)} %</small>`) +
+      cst('Outdoor air', `${f0(r.oaFlow * 1000)} <small>L/s${n > .05 ? ` · ${f1(r.oaFlow * 1000 / n)}/person` : ''}</small>`) +
+      cst('Infiltration', `${f2(r.infFlow * 3600 / ROOM_V)} <small>air changes/h</small>`) +
+    `</div><div class="cgrp">Internal gains · ${FLOOR_A} m² floor</div>` +
+      gainBlock('People', n > .05 ? `${f0(n)} · ${f1(FLOOR_A / n)} m²/person · ${f0(perS)} + ${f0(perL)} W each` : 'nobody in the room',
+        [['rad', r.pplRad], ['conv', r.pplConv], ['lat', r.pplLat]]) +
+      gainBlock('Lights', `${f1(lit / FLOOR_A)} W/m²`, [['vis', r.litVis], ['rad', r.litRad], ['conv', r.litConv], ['ret', r.litRet]]) +
+      gainBlock('Equipment', `${f1(eqp / FLOOR_A)} W/m²`, [['rad', r.eqRad], ['conv', r.eqConv]]) +
+    `<div class="gtot"><span class="k">Sensible internal gains</span><span class="x">${kW(sens)}</span>
+      <span class="k">Latent internal gains</span><span class="x">${kW(r.pplLat)}</span>
+      <span class="k">Radiant share of the sensible (incl. visible)</span><span class="x">${sens > 1 ? f0(rad / sens * 100) + ' %' : '—'}</span>
+      <span class="k">Sensible heat ratio, people</span><span class="x">${r.pplSens + r.pplLat > 1 ? f2(r.pplSens / (r.pplSens + r.pplLat)) : '—'}</span></div>`;
+}
+let condKey = '', balKey = '';
+let rightTab = 'bal';
+function setRightTab(t) {   // one panel at a time: the room balance or the conditions
+  rightTab = t; setSeg('rightSeg', 't', t);
+  $('rightSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
+  $('bal').hidden = t !== 'bal'; $('cond').hidden = t !== 'cond'; condKey = ''; balKey = '';
+  try { localStorage.setItem('tl-right-tab', t); } catch (e) {}
+}
+$('rightSeg').onclick = e => { const b = e.target.closest('button'); if (b) setRightTab(b.dataset.t); };
+try { const t = localStorage.getItem('tl-right-tab'); if (t === 'cond' || t === 'bal') setRightTab(t); } catch (e) {}
+$('balSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; balMode = b.dataset.b; setSeg('balSeg', 'b', balMode); balKey = ''; };
+
+
+function renderLegend(Ta) {   // horizontal: cold on the left, air temperature marked, hot on the right
+  const cv = $('lg'), c = cv.getContext('2d'), lo = Ta - 8, hi = Ta + 18, col = new THREE.Color();
+  for (let x = 0; x < cv.width; x++) { tcol(lo + (hi - lo) * x / (cv.width - 1), Ta, col); c.fillStyle = `#${col.getHexString()}`; c.fillRect(x, 0, 1, cv.height); }
+  const ticks = [lo, Ta, Ta + 6, Ta + 12, hi].map(v => Math.round(v));
+  $('lgT').innerHTML = ticks.map((v, j) => `<span class="${j === 1 ? 'air' : ''}" style="left:${(v - lo) / (hi - lo) * 100}%">${j === 1 ? `air ${v} °C` : `${v}°`}</span>`).join('');
+}
+
+// ================================================================ frame loop
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, clean = document.body.classList.contains('clean');
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  const B = document.body.classList, left = clean ? 0 : (B.contains('navclosed') ? 84 : 292) + (document.getElementById('card')?.classList.contains('folded') ? 0 : 462), right = clean ? 0 : 340;
+  if (!left && !right) camera.clearViewOffset(); else camera.setViewOffset(w, h, -(left - right) / 2, 0, w, h);
+  camera.updateProjectionMatrix(); for (const m of lineMats) m.resolution.set(w, h);
+}
+addEventListener('resize', resize); resize();
+const tmpC = new THREE.Color();
+let last = performance.now(), fN = 0, fT = 0, lastI = -1, legendKey = '', fieldKey = '', slabFocus = false;
+let lastT = -1, lastLabelI = -1, floorDirty = true, floorKey = '', chartKey = '', dynHTML = '';
+const tmpV = new THREE.Vector3();
+const tmpN = new THREE.Color('#f4f2ee');
+const FIELD = new Float32Array(NX * NZ), LITF = new Float32Array(NX * NZ);
+function buildField(r, Tp) {   // sunlit fraction per cell (4×4 samples), blurred so the patch fades at its edges (lateral conduction + penumbra)
+  for (let a = 0; a < NX; a++) for (let b = 0; b < NZ; b++) { let n = 0; for (let u = 0; u < 4; u++) for (let v = 0; v < 4; v++) n += sunlitXZ((a + (u + .5) / 4) * CELL, 0, (b + (v + .5) / 4) * CELL, S.sv, S.up); LITF[a * NZ + b] = n / 16; }
+  const K = [1, 6, 15, 20, 15, 6, 1], tmp = new Float32Array(NX * NZ), sumLit = LITF.reduce((s, x) => s + x, 0) * CELL * CELL, Tbase = r.S.Suelo.T - (Tp - r.S.Suelo.T) * sumLit / Math.max(1, 96 - sumLit);
+  for (let a = 0; a < NX; a++) for (let b = 0; b < NZ; b++) { let s = 0, w = 0; for (let d = -3; d <= 3; d++) { const aa = a + d; if (aa < 0 || aa >= NX) continue; s += K[d + 3] * LITF[aa * NZ + b]; w += K[d + 3]; } tmp[a * NZ + b] = s / w; }
+  for (let a = 0; a < NX; a++) for (let b = 0; b < NZ; b++) { let s = 0, w = 0; for (let d = -3; d <= 3; d++) { const bb = b + d; if (bb < 0 || bb >= NZ) continue; s += K[d + 3] * tmp[a * NZ + bb]; w += K[d + 3]; } FIELD[a * NZ + b] = Tbase + (Tp - Tbase) * Math.min(1, (s / w) * 1.15); }
+}
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now; CLK += dt; stepClock += dt;
+  fN++; fT += dt; if (fT > .5) { $('fps').textContent = `${Math.round(fN / fT)} fps`; fN = fT = 0; }
+  const s = steps[cur];
+  if (playing && s.t1) t = s.t0 + (s.t1 - s.t0) * frac(stepClock / 16);
+  const i = clamp(Math.floor(t * 20 + 1e-6), 0, 479); const r = row(i); S.r = r;   // epsilon: t = step/20 must land on that step
+  if (t !== lastT) { lastT = t; if (document.activeElement !== $('range')) $('range').value = t; }
+  if (i !== lastLabelI) { lastLabelI = i; $('time').textContent = stepLabel(i); }
+  const lk = season + Math.round(r.Tair); if (lk !== legendKey) { renderLegend(Math.round(r.Tair)); legendKey = lk; }
+  if (from) { const k = ease(clamp(stepClock / 2.4)), to = CAM[s.cam]; camera.position.copy(from.p).lerp(to.p, k); controls.target.copy(from.t).lerp(to.t, k); if (k >= 1) from = null; }
+
+  if (i !== lastI) {
+    lastI = i; S.sv = sunVec(r); S.up = r.alt > 0 && -S.sv.z > .02; LIT = litCells(); renderer.shadowMap.needsUpdate = true;
+    const day = smooth(-6, 6, r.alt); bg.copy(DUSK).lerp(PAPER, day); scene.background.copy(bg);
+    sunLight.position.copy(sunLight.target.position).addScaledVector(S.sv, 30); sunLight.intensity = 2.2 * smooth(0, 12, r.alt);
+    paintSlab(r);
+  }
+  // surface colours from EnergyPlus inside-face temperatures (floor patch estimated)
+  const Ta = r.Tair, Tp = patchT(r), FOC = focusOf(s), NEUTRAL = tmpN;
+  if (fieldKey !== season + i) { fieldKey = season + i; buildField(r, Tp); floorDirty = true; }
+  const floorOn = FOC.has('Suelo'), fk = `${floorOn}|${Math.round(Ta * 20)}`;
+  if (fk !== floorKey) { floorKey = fk; floorDirty = true; }
+  if (floorDirty) {   // recolour the floor only while its temperatures are still easing towards the new step
+    const kE = 1 - Math.exp(-dt / .5); let moving = 0;
+    for (let idx = 0; idx < NX * NZ; idx++) {
+      const d = FIELD[idx] - cellT[idx]; cellT[idx] += d * kE; if (Math.abs(d) > .01) moving++;
+      if (floorOn) tcol(cellT[idx], Ta, tmpC); else tmpC.copy(NEUTRAL);
+      for (let v = 0, o = idx * 18; v < 6; v++, o += 3) { fCol[o] = tmpC.r; fCol[o + 1] = tmpC.g; fCol[o + 2] = tmpC.b; }
+    }
+    floorGeo.attributes.color.needsUpdate = true; floorDirty = moving > 0 && floorOn;
+  }
+  for (const wg of walls) FOC.has(wg.key) ? tcol(r.S[wg.key].T, Ta, wg.mat.color) : wg.mat.color.copy(NEUTRAL);
+  FOC.has('Glass') ? tcol(r.TgIn, Ta, glassMat.color) : glassMat.color.set('#dfe7ee');
+  ceiling.visible = ceilEdge.visible = FOC.has('Cubierta'); if (ceiling.visible) tcol(r.S.Cubierta.T, Ta, ceilMat.color);
+  FOC.has('people') ? tcol(31, Ta, bodyMat.color) : bodyMat.color.set('#cfccc6');
+  FOC.has('equip') ? tcol(Ta + (r.eqConv > 400 ? 9 : 3), Ta, eqMat.color) : eqMat.color.set('#cfccc6');
+  FOC.has('lamps') && r.litRad > 5 ? tcol(40, Ta, lampMat.color) : lampMat.color.set('#f6f3e8');
+  if (slabFocus !== FOC.has('slab')) { slabFocus = FOC.has('slab'); lastI = -1; }
+
+  for (const wg of walls) {
+    const facing = wg.normal.dot(tmpV.subVectors(camera.position, wg.center)) > 0; wg.hidden = facing;
+    wg.fade += ((facing ? 0 : 1) - wg.fade) * (1 - Math.exp(-dt / .25)); wg.mat.opacity = wg.fade; wg.mat.depthWrite = wg.fade > .5;
+    for (const m of wg.meshes) if (m.userData.edges) m.userData.edges.visible = wg.fade > .3;
+  }
+  const showPeople = s.proc.some(e => ['lwPeople', 'vapour', 'convInternal', 'system', 'intRadOn'].includes(Array.isArray(e) ? e[0] : e) && !(Array.isArray(e) && e[1] && !e[1].includes('people')));
+  const n = showPeople ? nFig() : 0; people.forEach((p, k) => p.visible = k < n);
+
+  for (const L of LAYERS) L.begin(); LABS = []; sunBall.visible = false;
+  DIFF.on = false; DIFF.surf.clear();
+  for (const e of s.proc) { const [nm, only] = Array.isArray(e) ? e : [e, null]; (PROC[nm] || PROC_GUIDE[nm])(only); }
+  updateDiffuse(r, dt);
+  for (const a of s.an) ANNOT[a]();
+  drawHighlights(s, FOC);
+  for (const L of LAYERS) L.end(); drawLabels();
+
+  const bk = `${i}|${season}|${balMode}`; if (rightTab === 'bal' && bk !== balKey && (balMode === 'step' || !balKey.endsWith(season + '|day'))) { balKey = bk; renderBalance(r); }
+  const cdk = `${i}|${season}`; if (rightTab === 'cond' && cdk !== condKey) { condKey = cdk; renderConditions(r); }
+  const ck = `${cur}|${i}|${season}`;
+  if (ck !== cardKey) {
+    cardKey = ck; $('cS').textContent = s.say(r);
+    const tmpD = document.createElement('div'); tmpD.innerHTML = s.eq(r);
+    const kp = [...tmpD.querySelectorAll('.kpi')], fm = [...tmpD.children].filter(e => e.classList.contains('eq'));
+    const seen = new Set(fm.map(e => e.querySelector('.res')?.textContent));
+    const kpU = kp.filter(e => !seen.has(e.querySelector('.v').textContent));   // no value twice
+    const dyn = (kpU.length ? `<div class="sect">Time step ${stepLabel(i)}</div><div class="kpis">${kpU.map(e => e.outerHTML).join('')}</div>` : '')
+      + (fm.length ? `<div class="sect">Formula</div><div class="formula">${fm.map(e => e.outerHTML).join('')}</div>` : '')
+      + (sortMode === 'concept' ? sectionFor(s, r) : '');
+    const chk = `${sortMode}|${s.k || s.g}|${cur}|${season}|${s.title}`;
+    if (chk !== chartKey) {   // static graph, once per step
+      chartKey = chk; dynHTML = '';
+      $('cE').innerHTML = `<div id="cDyn"></div><div id="cChart"><div class="sect">24 h · ${season === 'summer' ? 'summer' : 'winter'} peak day</div>${chart24(s)}</div>`;
+    }
+    if (dyn !== dynHTML) { dynHTML = dyn; $('cDyn').innerHTML = dyn; }
+    chartTick(r);
+  }
+  controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+go(0);
+// self-check: every step of every mode, both seasons, every 30 min: no NaN/undefined in the card text, no throw
+function audit() {
+  const keep = { season, sortMode, elementPick, conceptPick, S_r: S.r }, bad = [], strip = h => String(h).replace(/<[^>]+>/g, '');
+  let n = 0;
+  for (const se of ['summer', 'winter']) {
+    season = se;
+    const sets = [['process', null], ...Object.keys(ELEMENTS).map(k => ['element', k]), ...CONCEPTS.map(c => ['concept', c.k])];
+    for (const [m, pick] of sets) {
+      sortMode = m; if (m === 'element') elementPick = pick; if (m === 'concept') conceptPick = pick;
+      makeSteps().forEach((st, si) => {
+        for (let i = 0; i < 480; i += 10) {
+          const r = row(i); S.r = r; S.sv = sunVec(r); S.up = r.alt > 0 && -S.sv.z > .02; n++;
+          try {
+            const txt = strip(st.say(r)) + strip(st.eq(r)) + (i === 0 ? strip(chart24(st)) : '') + (m === 'concept' ? strip(sectionFor(st, r)) : '');
+            if (/NaN|undefined|Infinity/.test(txt)) bad.push(`${se} ${m}${pick ? ':' + pick : ''} #${si} ${st.title} @${stepLabel(i)}: ${(txt.match(/.{0,30}(NaN|undefined|Infinity)/) || [''])[0]}`);
+            if (i % 40 === 0) {   // draw the glyphs too, and look for non-finite vertices
+              LIT = litCells(); for (const L of LAYERS) L.begin(); DIFF.surf.clear();
+              for (const e of st.proc) { const [nm, only] = Array.isArray(e) ? e : [e, null]; const f = PROC[nm] || PROC_GUIDE[nm]; if (!f) bad.push(`missing process ${nm}`); else f(only); }
+              drawHighlights(st, focusOf(st));
+              for (const L of LAYERS) if (L.P) for (let q = 0; q < L.n * 6; q++) if (!Number.isFinite(L.P[q])) { bad.push(`${st.title} @${stepLabel(i)}: non-finite vertex`); break; }
+            }
+            if (!CAM[st.cam]) bad.push(`${st.title}: no camera ${st.cam}`);
+          } catch (err) { bad.push(`${se} ${m} #${si} ${st.title} @${stepLabel(i)}: ${err.message}`); }
+        }
+      });
+    }
+  }
+  for (const L of LAYERS) L.begin(); LABS = []; season = keep.season; sortMode = keep.sortMode; elementPick = keep.elementPick; conceptPick = keep.conceptPick; S.r = keep.S_r;
+  steps = makeSteps(); go(Math.min(cur, steps.length - 1)); chartKey = '';
+  return { checked: n, problems: [...new Set(bad)] };
+}
+window.__dbg = { go, row: i => row(i), steps: () => steps, camera, controls, audit, renderConditions };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
