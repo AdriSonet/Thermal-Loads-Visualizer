@@ -987,6 +987,9 @@ function seriesFor(st) {
   const M = {
     loadDef: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)], room: [],
     designDay: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
+    peak: [ser('Q<sub>s</sub> room sensible load', r => r.loadS, C.load), ser('Q<sub>coil,s</sub> coil sensible load', r => r.coilS, C.ink)],
+    seasons: [ser('Q<sub>s,summer</sub> summer sensible load', r => rowIn('summer', r.i).loadS, C.cond), ser('Q<sub>s,winter</sub> winter sensible load', r => rowIn('winter', r.i).loadS, '#4b6ba9')],
+    comfort: [ser('T<sub>op</sub> operative, °C', r => r.Top, C.ink), ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load), ser('T<sub>mrt</sub> mean radiant, °C', r => r.MRT, C.lw)], daySummary: [],
     moisture: [ser('Q<sub>lat,people</sub> occupants', r => r.pplLat, C.vap), ser('Q<sub>lat,inf</sub> infiltration', r => latBal(r).inf, C.grey), ser('Q<sub>l</sub> latent load', r => r.loadL, C.load)],
     coil: [ser('Q<sub>coil,s</sub> coil sensible', r => r.coilS, C.ink), ser('Q<sub>s</sub> room sensible', r => r.loadS, C.load), ser('Q<sub>l</sub> room latent', r => r.loadL, C.vap)],
     thermostat: [ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load), ser('T<sub>heat</sub> heating setpoint, °C', () => 21, C.cond), ser('T<sub>cool</sub> cooling setpoint, °C', () => 25, '#4b6ba9')],
@@ -1065,6 +1068,10 @@ const ABOUT = {
   'Q_{coil,s}': ['Coil sensible load', 'Sensible heat removed (positive) or supplied (negative) by the coil: the room sensible load plus the outdoor-air load after recovery.'],
   'T_{heat}': ['Heating setpoint', 'Below 21 °C the system heats the room air.'],
   'T_{cool}': ['Cooling setpoint', 'Above 25 °C the system cools the room air.'],
+  'Q_{s,summer}': ['Summer sensible load', 'Room sensible load on the summer design day.'],
+  'Q_{s,winter}': ['Winter sensible load', 'Room sensible load on the winter design day; negative values are heating.'],
+  'T_{op}': ['Operative temperature', 'Combination of the air and mean radiant temperatures that a person perceives; close to their average in still air.'],
+  'T_{mrt}': ['Mean radiant temperature', 'Uniform surface temperature that would exchange the same radiation with a person as the actual surfaces.'],
   'T_{out}': ['Outdoor air temperature', 'Dry-bulb temperature of the outdoor air, measured in the shade.'],
   'T_{air}': ['Room air temperature', 'Temperature of the room air, taken as well mixed; the quantity the system controls.'],
   'T_{sky}': ['Sky temperature', 'Temperature of a black body that would emit the same long-wave radiation as the sky. It is not the sol-air temperature.'],
@@ -1147,6 +1154,26 @@ function processSteps() {
     { id: 'thermostat', g: '', title: 'Thermostat and setpoints', t0: hl, cam: 'overview', proc: ['system'], an: [], key: ['air'],
       say: r => `The thermostat keeps the room air between a heating setpoint of 21 °C and a cooling setpoint of 25 °C. Below 21 °C the coil heats and above 25 °C it cools; between the two it is idle and the air temperature floats, while the supply air, at the temperature it leaves the heat recovery, still adds or removes heat. Now: air ${f1(r.Tair)} °C, ${r.coilS > 50 ? `the coil cools (${kW(r.coilS)})` : r.coilS < -50 ? `the coil heats (${kW(-r.coilS)})` : 'the coil is idle'}; room sensible load ${kW(r.loadS)}.`,
       eq: r => eq('T<sub>air</sub>', 'room air temperature', '', `${f1(r.Tair)} °C`) + eq('Q<sub>coil,s</sub>', 'coil sensible load (+ cooling, − heating)', '', kW(r.coilS)) },
+    { id: 'peak', g: '', title: 'Peak load and sizing', t0: peakStep() / 20, cam: 'overview', proc: ['system'], an: [], key: ['air'],
+      say: r => { const ps = peakStep(), pk = row(ps), cs = peakStep(x => x.coilS), lp = Math.round(argmax(x => x.loadL) * 20), kind = season === 'summer' ? 'cooling' : 'heating';
+        return `Equipment is sized for the peak loads of the design days, not for their averages. On this ${season} day the largest ${kind} load of the room is ${kW(Math.abs(pk.loadS))} at ${stepLabel(ps)}, ${f0(Math.abs(pk.loadS) / FLOOR_A)} W per m² of floor. At the coil, with the outdoor air added, the largest ${kind} load is ${kW(Math.abs(row(cs).coilS))} at ${stepLabel(cs)}. The largest latent load of the room is ${kW(row(lp).loadL)} at ${stepLabel(lp)}.`; },
+      eq: r => { const ps = peakStep(), pk = row(ps), cs = peakStep(x => x.coilS), lp = Math.round(argmax(x => x.loadL) * 20);
+        return eq('Q<sub>s,peak</sub>', `room, at ${stepLabel(ps)}`, '', kW(pk.loadS)) + eq('q<sub>s,peak</sub>', 'per m² of floor', '', `${f0(Math.abs(pk.loadS) / FLOOR_A)} W/m²`) +
+          eq('Q<sub>coil,s,peak</sub>', `coil, at ${stepLabel(cs)}`, '', kW(row(cs).coilS)) + eq('Q<sub>l,peak</sub>', `room latent, at ${stepLabel(lp)}`, '', kW(row(lp).loadL)); } },
+    { id: 'seasons', g: '', title: 'Summer and winter', t0: 15, cam: 'overview', proc: ['system'], an: [], key: ['air'],
+      say: r => { const su = seasonStats('summer'), wi = seasonStats('winter');
+        return `The two design days load the room differently. In summer sun, internal gains and warm outdoor air add heat and the room needs cooling, up to ${kW(su.max)} as an hourly mean. In winter the internal and solar gains still produce a cooling load during the day, up to ${kW(wi.max)}; the room needs heating for ${f1(wi.heatH)} h, up to ${kW(-wi.min)}${wi.heatEmpty ? ', all of it while the room is unoccupied' : ''}.`; },
+      eq: r => { const su = seasonStats('summer'), wi = seasonStats('winter');
+        return eq('Q<sub>s,max,summer</sub>', 'largest cooling load, summer, hourly mean', '', kW(su.max)) + eq('Q<sub>s,max,winter</sub>', 'largest cooling load, winter, hourly mean', '', kW(wi.max)) + eq('Q<sub>s,min,winter</sub>', 'largest heating load, winter, hourly mean', '', kW(wi.min)); } },
+    { id: 'comfort', g: '', title: 'Comfort: operative temperature', t0: 13, cam: 'room', proc: ['lwNet'], an: ['temps'], key: ['lw'],
+      say: r => `Thermal comfort depends on both the air temperature and the mean radiant temperature of the surrounding surfaces. The operative temperature combines them; in still air it is close to their average, and comfort standards set limits on it. Now: air ${f1(r.Tair)} °C, mean radiant ${f1(r.MRT)} °C, operative ${f1(r.Top)} °C, relative humidity ${f0(r.RH)} %.`,
+      eq: r => eq('T<sub>op</sub>', '≈ (T<sub>air</sub> + T<sub>mrt</sub>) / 2', `(${f1(r.Tair)} + ${f1(r.MRT)}) / 2`, `${f1(r.Top)} °C`) + eq('φ<sub>in</sub>', 'indoor relative humidity', '', `${f0(r.RH)} %`) },
+    { id: 'daySummary', g: '', title: 'Summary of the day', t0: 12, cam: 'overview', proc: [], an: [], key: [],
+      say: r => { const E = dayE();
+        return `Over the design day the rates add up to energies. The daily sensible load equals the daily heat gain, plus the exchange through the glazing and by infiltration, plus the net conduction of walls, roof and slab, minus what the air stores. Heat stored by day and released at night largely cancels in the construction term; what remains is mostly heat lost through these elements to outdoors and the ground. This ${season} day: heat gain ${f1(E.gain)} kWh, glazing and infiltration ${f1(E.env)} kWh, construction ${f1(E.cd)} kWh, room sensible load ${f1(E.load)} kWh; coil sensible ${f1(E.coil)} kWh.`; },
+      eq: r => { const E = dayE();
+        return eq('E<sub>s</sub>', '≈ E<sub>gain</sub> + E<sub>env</sub> + E<sub>cd</sub> − E<sub>air</sub>', `${f1(E.gain)} + ${f1(E.env)} + ${f1(E.cd)} − ${f1(E.air)}`, `${f1(E.load)} kWh`) +
+          eq('E<sub>OA</sub>', 'outdoor air after recovery', '', `${f1(E.oa)} kWh`) + eq('E<sub>coil,s</sub>', 'coil sensible', '', `${f1(E.coil)} kWh`) + eq('E<sub>l</sub>', 'room latent', '', `${f1(E.lat)} kWh`); } },
     { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
       say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
         return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
@@ -1225,13 +1252,22 @@ function processSteps() {
 const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', tsky: 'Sky temperature', solair: 'Sol-air temperature', sun: 'Sun', dni: 'Direct normal', dhi: 'Diffuse horizontal',
   tair: 'Air temperature', mrt: 'Mean radiant', top: 'Operative', humIn: 'Indoor humidity', oa: 'Outdoor air', infil: 'Infiltration', people: 'People', lights: 'Lights', equip: 'Equipment',
   sensInt: 'Sensible internal gains', latInt: 'Latent internal gains', radShare: 'Radiant share', shr: 'Sensible heat ratio' };
-const COND_OF = { moisture: ['humIn', 'humOut', 'latInt'], thermostat: ['tair'], gainsAmount: ['people', 'lights', 'equip'], outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+const COND_OF = { comfort: ['top', 'mrt', 'tair', 'humIn'], moisture: ['humIn', 'humOut', 'latInt'], thermostat: ['tair'], gainsAmount: ['people', 'lights', 'equip'], outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
   convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
 const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
 // room moisture balance, from the humidity ratios: occupants + infiltration − moisture stored in the air ≈ latent load (W)
 const H_FG = 2454e3;
 function latBal(r) { const p = row(Math.max(0, r.i - 1)); return { ppl: r.pplLat, inf: 1.2 * r.infFlow * H_FG * (r.wOut - r.wIn), st: r.i ? 1.2 * ROOM_V * H_FG * (r.wIn - p.wIn) / (SB[season].step_min * 60) : 0 }; }
 const roomSHR = r => r.loadS > 1 && r.loadL >= 0 ? f2(r.loadS / (r.loadS + r.loadL)) : '—';
+// reading the other season without leaving it changed (rows are cached per season)
+function rowIn(se, i) { const k = season; try { season = se; return row(i); } finally { season = k; } }
+const peakStep = (f = x => x.loadS) => Math.round(argmax(x => season === 'summer' ? f(x) : -f(x)) * 20);   // largest cooling in summer, largest heating in winter
+function seasonStats(se) {   // largest hourly means (the winter load oscillates between steps), hours of heating
+  let max = -Infinity, min = Infinity, heat = 0, heatOcc = 0, acc = 0; const per = 60 / SB[se].step_min;
+  for (let i = 0; i < 480; i++) { const r = rowIn(se, i); acc += r.loadS; if ((i + 1) % per === 0) { max = Math.max(max, acc / per); min = Math.min(min, acc / per); acc = 0; } if (r.loadS < 0) { heat++; if (r.occ > .05) heatOcc++; } }
+  return { max, min, heatH: heat * SB[se].step_min / 60, heatEmpty: heat > 0 && !heatOcc }; }
+const dayE = () => ({ gain: dayKWh(gainSI, 'gainSI'), env: dayKWh(envI, 'envI'), cd: dayKWh(massCd, 'massCd'), air: dayKWh(r => r.airStore, 'airStore'), load: dayKWh(r => r.loadS, 'loadS'),
+  oa: dayKWh(r => r.oaAfter, 'oaAfter'), coil: dayKWh(r => r.coilS, 'coilS'), lat: dayKWh(r => r.loadL, 'loadL') });
 // steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
 const layersR = name => SB.constructions[name].layers.reduce((a, l) => a + l.thickness / SB.materials[l.material].conductivity, 0);
 function uValue(name) {
@@ -1448,7 +1484,7 @@ const CHAPTERS = [
     takeaway: 'The coil load is the room load plus the outdoor-air load after recovery; the thermostat decides when it heats or cools.',
     q: 'On the winter day the outdoor air is near 2 °C. Why does the room need cooling in the afternoon?',
     a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose; the ventilation air, cooler than the room after the heat recovery, removes the surplus while the coil is idle.' },
-  { k: 'results', name: 'Results', ids: [],
+  { k: 'results', name: 'Results', ids: ['peak', 'seasons', 'comfort', 'daySummary'],
     aim: "The design figures: peak load, the two seasons, comfort and the day's energy.",
     takeaway: 'The peak sensible and latent loads size the system; comfort is judged on the operative temperature.',
     q: 'Why is the operative temperature above the air temperature at the summer peak?',
@@ -1505,6 +1541,14 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
     for (const i of [100, 340]) { const r = row(i), txt = th ? th.say(r) : ''; const want = r.coilS > 50 ? 'the coil cools' : r.coilS < -50 ? 'the coil heats' : 'the coil is idle'; if (!txt.includes(want)) bad.push(`thermostat at winter ${stepLabel(i)} does not say '${want}'`); }
     season = keepS;
   } catch (e) { bad.push(`chapters 6–7: ${e.message}`); }
+  // chapter 8: reading the other season leaves this one untouched; the day's energy balance closes
+  try {
+    const keepS = season; season = 'summer'; const r0 = row(300), ss = processSteps().find(x => x.id === 'seasons');
+    if (ss) chart24(ss); if (season !== 'summer' || row(300) !== r0) bad.push('seasons graph changed the current season or its rows');
+    for (const se of ['summer', 'winter']) { season = se; let a = 0, b = 0; for (let i = 0; i < 480; i++) { const r = row(i); a += gainSI(r) + envI(r) + massCd(r) - r.airStore; b += r.loadS; }
+      if (Math.abs(a - b) > .02 * Math.abs(b)) bad.push(`${se}: daily balance does not close (${f0(a / 20)} vs ${f0(b / 20)} Wh)`); }
+    season = keepS;
+  } catch (e) { bad.push(`chapter 8: ${e.message}`); }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
