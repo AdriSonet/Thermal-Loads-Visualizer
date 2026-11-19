@@ -79,6 +79,20 @@
   #card .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 7px; white-space: nowrap; }
   #card .say { font-size: 14px; line-height: 1.5; margin: 10px 0 0; color: var(--ink-2); max-width: 60ch; }
   #card.folded { bottom: auto; }
+  #chapBar { margin: -2px 0 12px; }
+  #chapBar .segs { display: flex; gap: 3px; }
+  #chapBar .segs i { flex: 1; height: 3px; border-radius: 2px; background: var(--line-2); }
+  #chapBar .segs i.done { background: #b9b5ae; }
+  #chapBar .segs i.now { background: var(--ink); }
+  #chapBar .lbl { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  #card .aim { font-size: 13px; line-height: 1.5; margin: 10px 0 0; padding: 8px 10px; background: var(--chip); border-radius: 8px; color: var(--ink-2); max-width: 60ch; }
+  #card .aim b { color: var(--ink); font-weight: 600; }
+  #chapEnd { margin-top: 14px; }
+  #chapEnd p { font-size: 13.5px; line-height: 1.5; margin: 4px 0 10px; color: var(--ink-2); max-width: 60ch; }
+  #chapEnd .q { color: var(--ink); font-weight: 500; }
+  #chapEnd .reveal { font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--surface); cursor: pointer; color: var(--ink); }
+  #chapEnd .reveal[hidden] { display: none; }
+  .modenote { margin: 6px 16px 2px; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
   #card.folded #cBody { display: none; }
   .sect { font-size: 12px; font-weight: 600; color: var(--muted); margin: 18px 0 7px; display: flex; align-items: center; gap: 8px; }
   .sect::after { content: ""; flex: 1; border-top: 1px solid var(--line-2); }
@@ -241,6 +255,7 @@
     <button role="tab" data-mode="element">Elements</button>
     <button role="tab" data-mode="concept">Concepts</button>
   </div>
+  <p class="modenote" id="modeNote"></p>
   <div id="steps"></div>
   <div class="nav-foot">
     <div class="seg" id="seasonSeg"><button data-s="summer" class="on">Summer peak</button><button data-s="winter">Winter peak</button></div>
@@ -252,14 +267,21 @@
   </div>
 </nav>
 <section id="card">
+  <div id="chapBar" hidden><div class="segs"></div><div class="lbl"></div></div>
   <div class="head">
     <h2 id="cT"></h2>
     <span class="count" id="cCount"></span>
     <button class="icon" id="fold" aria-label="Fold the panel" title="Fold"><svg class="i"><use href="#i-minus"/></svg></button>
   </div>
   <div id="cBody">
+    <p class="aim" id="chapAim" hidden></p>
     <p class="say" id="cS"></p>
     <div id="cE"></div>
+    <div id="chapEnd" hidden>
+      <div class="sect">Take away</div><p class="tk"></p>
+      <div class="sect">Check</div><p class="q"></p>
+      <button class="reveal" id="chapReveal">Show answer</button><p class="ans" id="chapAns" hidden></p>
+    </div>
   </div>
 </section>
 <aside id="right" aria-label="Temperature scale, conditions and room balance">
@@ -1361,6 +1383,25 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
     }
   } finally { season = keep; }
   for (const c of CHAPTERS) for (const f of ['aim', 'takeaway', 'q', 'a']) if (!c[f]) bad.push(`chapter ${c.k}: no ${f}`);
+  // opening on a chapter's first step, closing and question on its last, neither in between nor outside the Story
+  const st = processSteps(), vis = id => { const e = $(id); return !!e && !e.hidden; };
+  try {
+    for (const c of CHAPTERS) {
+      const idx = c.ids.map(id => st.findIndex(x => x.id === id)).filter(i => i >= 0); if (!idx.length) continue;
+      const first = idx[0], last = idx[idx.length - 1];
+      renderChapter(st[first], first, st, 'process');
+      if (!vis('chapAim') || !$('chapAim').innerHTML.includes(c.aim)) bad.push(`chapter ${c.k}: no opening on its first step`);
+      if (idx.length > 1 && vis('chapEnd')) bad.push(`chapter ${c.k}: closing shown on its first step`);
+      renderChapter(st[last], last, st, 'process');
+      if (!vis('chapEnd') || !$('chapEnd').innerHTML.includes(c.takeaway) || !$('chapEnd').innerHTML.includes(c.q)) bad.push(`chapter ${c.k}: no closing on its last step`);
+      if (vis('chapAns')) bad.push(`chapter ${c.k}: answer visible before Show answer`);
+      if (idx.length > 1 && vis('chapAim')) bad.push(`chapter ${c.k}: opening shown on its last step`);
+      if (idx.length > 2) { renderChapter(st[idx[1]], idx[1], st, 'process'); if (vis('chapAim') || vis('chapEnd')) bad.push(`chapter ${c.k}: opening or closing on a middle step`); }
+    }
+    renderChapter(st[0], 0, st, 'element');
+    if (vis('chapAim') || vis('chapEnd') || vis('chapBar')) bad.push('chapter cards shown outside the Story');
+  } catch (e) { bad.push(`chapter cards: ${e.message}`); }
+  finally { if (typeof renderChapter === 'function' && steps[cur]) renderChapter(steps[cur], cur, steps, sortMode); }
   return bad;
 }
 let conceptPick = 'solar';
@@ -1491,11 +1532,28 @@ function renderList() {
   $('steps').querySelectorAll('.el[data-grp]').forEach(el => el.onclick = () => { wallsOpen = !el.classList.contains('open'); if (!wallsOpen && ELEMENT_CATS[1][1][1].keys.includes(elementPick)) wallsOpen = false; renderList(); });
   $('steps').querySelector('.s.on')?.scrollIntoView({ block: 'nearest' });
 }
+const MODE_NOTE = { process: 'The lecture, A to Z, in order.', element: 'An exercise: follow one element through the day.', concept: 'A review: one idea at a time.' };
+function renderChapter(step, i, list = steps, mode = sortMode) {   // progress bar, opening on a chapter's first step, closing and check question on its last
+  const story = mode === 'process', n = story ? chapterOf(step.id) : -1, c = CHAPTERS[n];
+  $('modeNote').textContent = MODE_NOTE[mode] || '';
+  $('chapBar').hidden = $('chapAim').hidden = $('chapEnd').hidden = true; $('chapAns').hidden = true; $('chapReveal').hidden = false;
+  if (!c) return;
+  const inCh = list.map((x, j) => [x, j]).filter(([x]) => chapterOf(x.id) === n).map(([, j]) => j), first = inCh[0], last = inCh[inCh.length - 1];
+  $('chapBar').querySelector('.segs').innerHTML = CHAPTERS.map((_, j) => `<i class="${j < n ? 'done' : j === n ? 'now' : ''}"></i>`).join('');
+  $('chapBar').querySelector('.lbl').textContent = `Chapter ${n + 1} of ${CHAPTERS.length} · ${c.name}`;
+  $('chapBar').hidden = false;
+  if (i === first) { $('chapAim').innerHTML = `<b>In this chapter.</b> ${c.aim}`; $('chapAim').hidden = false; }
+  if (i === last) {
+    $('chapEnd').querySelector('.tk').innerHTML = c.takeaway; $('chapEnd').querySelector('.q').innerHTML = c.q; $('chapAns').innerHTML = c.a; $('chapEnd').hidden = false;
+  }
+}
+$('chapReveal').onclick = () => { $('chapAns').hidden = false; $('chapReveal').hidden = true; };
 function go(i) {
   cur = (i + steps.length) % steps.length; stepClock = 0; from = { p: camera.position.clone(), t: controls.target.clone() };
   const s = steps[cur]; t = s.t0; cardKey = ''; renderList();
   $('cT').textContent = s.title; $('cCount').textContent = `${cur + 1} / ${steps.length}`;
   $('railPos').textContent = `${cur + 1} / ${steps.length}`;
+  renderChapter(s, cur);
 }
 function setSeg(id, attr, val) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); }
 $('modeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; sortMode = b.dataset.mode; setSeg('modeSeg', 'mode', sortMode); steps = makeSteps(); go(0); };
