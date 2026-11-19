@@ -2,7 +2,7 @@
 
 An interactive 3D look at the physical processes behind a room's thermal load: sun through the glazing, absorption, conduction and storage in the slab, long-wave exchange, convection, people, lights, equipment, ventilation and the system load.
 
-Every number and glyph follows a simulated peak day (summer and winter, 3-minute time steps) of a 12 × 8 × 4 m boarding lounge in Zaragoza with a 9 × 3 m south-facing curtain wall. The few values that are estimated for the drawing (the sunlit floor temperature, for example) are marked as estimated on the page.
+Every number and glyph follows a simulated design day (summer and winter, 3-minute time steps) of a 12 × 8 × 4 m boarding lounge in Zaragoza with a 9 × 3 m south-facing curtain wall. The few values that are estimated for the drawing (the sunlit floor temperature, for example) are marked as estimated on the page.
 
 ## Open it
 
