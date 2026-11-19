@@ -990,7 +990,7 @@ function seriesFor(st) {
     peak: [ser('Q<sub>s</sub> room sensible load', r => r.loadS, C.load), ser('Q<sub>coil,s</sub> coil sensible load', r => r.coilS, C.ink)],
     seasons: [ser('Q<sub>s,summer</sub> summer sensible load', r => rowIn('summer', r.i).loadS, C.cond), ser('Q<sub>s,winter</sub> winter sensible load', r => rowIn('winter', r.i).loadS, '#4b6ba9')],
     comfort: [ser('T<sub>op</sub> operative, °C', r => r.Top, C.ink), ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load), ser('T<sub>mrt</sub> mean radiant, °C', r => r.MRT, C.lw)], daySummary: [],
-    moisture: [ser('Q<sub>lat,people</sub> occupants', r => r.pplLat, C.vap), ser('Q<sub>lat,inf</sub> infiltration', r => latBal(r).inf, C.grey), ser('Q<sub>l</sub> latent load', r => r.loadL, C.load)],
+    moisture: [ser('Q<sub>lat,people</sub> occupants', r => r.pplLat, C.vap), ser('Q<sub>lat,inf</sub> infiltration (est.)', r => latBal(r).inf, C.grey), ser('Q<sub>l</sub> latent load', r => r.loadL, C.load)],
     coil: [ser('Q<sub>coil,s</sub> coil sensible', r => r.coilS, C.ink), ser('Q<sub>s</sub> room sensible', r => r.loadS, C.load), ser('Q<sub>l</sub> room latent', r => r.loadL, C.vap)],
     thermostat: [ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load), ser('T<sub>heat</sub> heating setpoint, °C', () => 21, C.cond), ser('T<sub>cool</sub> cooling setpoint, °C', () => 25, '#4b6ba9')],
     gainsAmount: [ser('Q<sub>people</sub> people, sensible + latent', r => r.pplSens + r.pplLat, C.lw), ser('P<sub>lights</sub> lights', r => r.litVis + r.litRad + r.litConv + r.litRet, C.sun), ser('P<sub>equip</sub> equipment', r => r.eqRad + r.eqConv, C.grey)],
@@ -1094,16 +1094,17 @@ function chart24(st) {
   const S_ = seriesFor(st); if (!S_.length) { CH = null; return ''; }
   const Wd = 410, Hd = 150, pts = S_.map(x => Array.from({ length: 480 }, (_, j) => x.f(row(j))));
   let lo = Infinity, hi = -Infinity; for (const a of pts) for (const v of a) { if (v < lo) lo = v; if (v > hi) hi = v; }
-  const mx = niceUp(Math.max(hi, 1)), mn = lo < 0 ? -niceUp(-lo) : 0;
+  const degC = S_[0].n.includes('°C');   // temperatures: own unit, axis fitted to the data instead of starting at zero
+  const mx = degC ? Math.ceil(hi + 1) : niceUp(Math.max(hi, 1)), mn = degC ? Math.floor(lo - 1) : lo < 0 ? -niceUp(-lo) : 0;
   const Y = v => 4 + (mx - v) / (mx - mn) * (Hd - 18), X = j => (j / 480 * Wd).toFixed(1);
-  const unit = S_[0].n.includes('W/m²') ? ' W/m²' : ' W', valU = S_[0].n.includes('W/m²') ? '' : ' W';
+  const unit = degC ? ' °C' : S_[0].n.includes('W/m²') ? ' W/m²' : ' W', valU = S_[0].n.includes('W/m²') ? '' : ' W', fmt = v => degC ? `${f1(v)} °C` : `${f0(v)}${valU}`;
   const lines = S_.map((x, s) => `<polyline points="${pts[s].map((v, j) => `${X(j)},${Y(v).toFixed(1)} ${X(j + 1)},${Y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${x.c}" stroke-width="1.8" stroke-linejoin="round"/>`).join('');
   const dots = S_.map(x => `<circle r="3" fill="${x.c}" stroke="#fff" stroke-width="1"/>`).join('');
   const grid = [0, 6, 12, 18, 24].map(h => `<line x1="${X(h * 20)}" x2="${X(h * 20)}" y1="2" y2="${Hd - 14}" stroke="#ece9e3"/><text x="${X(h * 20)}" y="${Hd - 3}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${String(h).padStart(2, '0')}</text>`).join('');
   const yLab = (v, y, dy) => `<line x1="0" x2="${Wd}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ece9e3"/><text x="${Wd - 2}" y="${(y + dy).toFixed(1)}" text-anchor="end" paint-order="stroke" stroke="#fff" stroke-width="3">${f0(v)}${unit}</text>`;
-  const axes = yLab(mx, Y(mx), 10) + (mn < 0 ? yLab(mn, Y(mn), -4) + `<line x1="0" x2="${Wd}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#b9b5ae" stroke-dasharray="3 3"/>` : '');
+  const axes = yLab(mx, Y(mx), 10) + (mn < 0 || degC ? yLab(mn, Y(mn), -4) : '') + (mn < 0 && mx > 0 ? `<line x1="0" x2="${Wd}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#b9b5ae" stroke-dasharray="3 3"/>` : '');
   const seen = new Set(), about = S_.map(x => aboutOf(x.n)).filter(a => a && !seen.has(a.k) && seen.add(a.k));
-  CH = { S_, Y, Wd, valU };
+  CH = { S_, Y, Wd, valU, fmt };
   return `<div class="chart"><svg width="${Wd}" height="${Hd}" style="display:block;font:10px 'IBM Plex Sans';fill:#8a8a8a">${grid}${axes}${lines}
     <line class="now" y1="2" y2="${Hd - 14}" stroke="#1b1b1b"/>${dots}</svg>
     <div class="lg">${S_.map(x => `<span><i style="background:${x.c}"></i>${x.n}</span><b></b>`).join('')}</div>
@@ -1113,7 +1114,7 @@ function chartTick(r) {   // move the "now" marker and refresh the values for th
   const el = $('cChart'); if (!CH || !el) return;
   const x = ((r.i + .5) / 480 * CH.Wd).toFixed(1), ln = el.querySelector('.now'); ln.setAttribute('x1', x); ln.setAttribute('x2', x);
   el.querySelectorAll('circle').forEach((c, s) => { c.setAttribute('cx', x); c.setAttribute('cy', CH.Y(CH.S_[s].f(r)).toFixed(1)); });
-  el.querySelectorAll('.lg b').forEach((b, s) => b.textContent = `${f0(CH.S_[s].f(r))}${CH.valU}`);
+  el.querySelectorAll('.lg b').forEach((b, s) => b.textContent = CH.fmt(CH.S_[s].f(r)));
 }
 function dayChart() { return eq('Q<sub>load</sub>', 'later and lower than the gain', '', kW(S.r.loadS)); }
 function argmax(f) { let b = 0, bv = -Infinity; for (let i = 0; i < 480; i++) { const v = f(row(i)); if (v > bv) { bv = v; b = i; } } return b / 20; }
@@ -1129,7 +1130,7 @@ function processSteps() {
         return eq('U<sub>wall</sub>', '1 / (R<sub>si</sub> + Σ d/λ + R<sub>se</sub>)', `1 / (0,13 + ${f2(L)} + 0,04)`, `${f2(uValue(SB.face_construction.Muro_N))} W/m²K`) +
           eq('U<sub>roof</sub>', 'light roof, 70 mm PIR', '', `${f2(uValue(SB.face_construction.Cubierta))} W/m²K`) +
           eq('U<sub>floor</sub>', 'slab on XPS, without the ground', '', `${f2(uValue(SB.face_construction.Suelo))} W/m²K`) +
-          eq('U<sub>g</sub>', 'glazing, effective value from the simulation', '', `${f1(U_G)} W/m²K`); } },
+          eq('U<sub>g</sub>', 'glazing, effective on winter nights', '', `${f1(U_G)} W/m²K`, 'est'); } },
     { id: 'outdoor', g: '', title: 'Outdoor temperature and humidity', t0: 15, cam: 'sky', proc: ['sunPath'], an: [], key: [],
       say: r => `The dry-bulb temperature is the air temperature measured in the shade. The humidity ratio w is the mass of water vapour per kilogram of dry air; it does not change when air is heated or cooled without condensation, so it is the quantity that ventilation and infiltration carry into the room. The relative humidity φ is the vapour pressure as a fraction of the saturation pressure at the air temperature. Now: ${f1(r.Tout)} °C, ${f1(r.wOut * 1000)} g/kg, ${f0(rhOf(r.Tout, r.wOut) * 100)} %.`,
       eq: r => eq('T<sub>out</sub>', 'outdoor dry-bulb temperature', '', `${f1(r.Tout)} °C`) + eq('w<sub>out</sub>', 'outdoor humidity ratio', '', `${f1(r.wOut * 1000)} g/kg`) + eq('φ<sub>out</sub>', 'outdoor relative humidity', '', `${f0(rhOf(r.Tout, r.wOut) * 100)} %`) },
@@ -1146,8 +1147,8 @@ function processSteps() {
     { id: 'moisture', g: '', title: 'Room moisture balance', t0: ho, cam: 'person', proc: ['vapour', 'infil'], an: ['people'], key: ['vap', 'air'],
       say: r => { const L = latBal(r);
         return `The room air gains moisture from the occupants and exchanges it with the outdoor air that leaks in; the water it holds rises or falls with its humidity ratio. The system removes the rest, which is the latent load. Each flow is a mass of water times its latent heat, ṁ·h<sub>fg</sub>, with h<sub>fg</sub> = 2.454 kJ/kg. Now: ${f1(r.wIn * 1000)} g/kg indoors, ${f1(r.wOut * 1000)} g/kg outdoors; occupants ${Wf(L.ppl)}, infiltration ${Wf(L.inf)}, latent load ${kW(r.loadL)}.`; },
-      eq: r => { const L = latBal(r); return eq('Q<sub>l</sub>', '≈ Q<sub>lat,people</sub> + Q<sub>lat,inf</sub> − Q<sub>lat,air</sub>', `${f0(L.ppl)} + ${f0(L.inf)} − ${f0(L.st)}`, Wf(r.loadL)) +
-        eq('Q<sub>lat,inf</sub>', 'infiltration, ρ·V̇·h<sub>fg</sub>·(w<sub>out</sub> − w<sub>in</sub>)', '', Wf(L.inf)) + eq('Q<sub>lat,air</sub>', 'moisture stored in the room air', '', Wf(L.st)); } },
+      eq: r => { const L = latBal(r); return eq('Q<sub>l</sub>', '≈ Q<sub>lat,people</sub> + Q<sub>lat,inf</sub> − Q<sub>lat,air</sub>', `${f0(L.ppl)} + ${f0(L.inf)} − ${f0(L.st)}`, Wf(r.loadL), 'est') +
+        eq('Q<sub>lat,inf</sub>', 'infiltration, ρ·V̇·h<sub>fg</sub>·(w<sub>out</sub> − w<sub>in</sub>)', '', Wf(L.inf), 'est') + eq('Q<sub>lat,air</sub>', 'moisture stored in the room air', '', Wf(L.st), 'est'); } },
     { id: 'coil', g: '', title: 'Coil load: sensible, latent and SHR', t0: hl, cam: 'air', proc: ['vent', 'system'], an: [], key: ['air'],
       say: r => `The coil conditions the supply air. Its sensible load is the room sensible load plus the outdoor-air load after heat recovery. The sensible heat ratio, SHR = Q<sub>s</sub>/(Q<sub>s</sub> + Q<sub>l</sub>), is the sensible share of the room load; a lower SHR needs a colder coil surface to dehumidify. The outdoor-air latent load is reported only when the outdoor air is more humid than the room, so the coil latent load is not shown. Now: coil sensible ${kW(r.coilS)} ≈ room ${kW(r.loadS)} + outdoor air ${kW(r.oaAfter)}; room SHR ${roomSHR(r)}.`,
       eq: r => eq('Q<sub>coil,s</sub>', '≈ Q<sub>s</sub> + Q<sub>OA</sub>', `${f0(r.loadS)} + ${f0(r.oaAfter)}`, Wf(r.coilS)) + eq('SHR', 'room sensible heat ratio', '', roomSHR(r)) + eq('Q<sub>l</sub>', 'room latent load', '', kW(r.loadL)) },
@@ -1162,9 +1163,10 @@ function processSteps() {
           eq('Q<sub>coil,s,peak</sub>', `coil, at ${stepLabel(cs)}`, '', kW(row(cs).coilS)) + eq('Q<sub>l,peak</sub>', `room latent, at ${stepLabel(lp)}`, '', kW(row(lp).loadL)); } },
     { id: 'seasons', g: '', title: 'Summer and winter', t0: 15, cam: 'overview', proc: ['system'], an: [], key: ['air'],
       say: r => { const su = seasonStats('summer'), wi = seasonStats('winter');
-        return `The two design days load the room differently. In summer sun, internal gains and warm outdoor air add heat and the room needs cooling, up to ${kW(su.max)} as an hourly mean. In winter the internal and solar gains still produce a cooling load during the day, up to ${kW(wi.max)}; the room needs heating for ${f1(wi.heatH)} h, up to ${kW(-wi.min)}${wi.heatEmpty ? ', all of it while the room is unoccupied' : ''}.`; },
+        return `The two design days load the room differently; all figures are hourly means. In summer sun, internal gains and warm outdoor air add heat: the room load reaches ${kW(su.max)} of cooling and the coil ${kW(su.cmax)}. In winter the internal and solar gains still give the room a cooling load during the day, up to ${kW(wi.max)}, which the ventilation air removes: ${wi.cmax <= 50 ? 'the coil never cools' : `the coil cools up to ${kW(wi.cmax)}`}. The room needs heating for ${f1(wi.heatH)} h, up to ${kW(-wi.min)}${wi.heatEmpty ? ', all of it while the room is unoccupied' : ''}, and the coil heats the supply air up to ${kW(-wi.cmin)}.`; },
       eq: r => { const su = seasonStats('summer'), wi = seasonStats('winter');
-        return eq('Q<sub>s,max,summer</sub>', 'largest cooling load, summer, hourly mean', '', kW(su.max)) + eq('Q<sub>s,max,winter</sub>', 'largest cooling load, winter, hourly mean', '', kW(wi.max)) + eq('Q<sub>s,min,winter</sub>', 'largest heating load, winter, hourly mean', '', kW(wi.min)); } },
+        return eq('Q<sub>s,max,summer</sub>', 'room, largest cooling load, summer, hourly mean', '', kW(su.max)) + eq('Q<sub>s,max,winter</sub>', 'room, largest cooling load, winter, hourly mean', '', kW(wi.max)) +
+          eq('Q<sub>s,min,winter</sub>', 'room, largest heating load, winter, hourly mean', '', kW(wi.min)) + eq('Q<sub>coil,s,min,winter</sub>', 'coil, largest heating load, winter, hourly mean', '', kW(wi.cmin)); } },
     { id: 'comfort', g: '', title: 'Comfort: operative temperature', t0: 13, cam: 'room', proc: ['lwNet'], an: ['temps'], key: ['lw'],
       say: r => `Thermal comfort depends on both the air temperature and the mean radiant temperature of the surrounding surfaces. The operative temperature combines them; in still air it is close to their average, and comfort standards set limits on it. Now: air ${f1(r.Tair)} °C, mean radiant ${f1(r.MRT)} °C, operative ${f1(r.Top)} °C, relative humidity ${f0(r.RH)} %.`,
       eq: r => eq('T<sub>op</sub>', '≈ (T<sub>air</sub> + T<sub>mrt</sub>) / 2', `(${f1(r.Tair)} + ${f1(r.MRT)}) / 2`, `${f1(r.Top)} °C`) + eq('φ<sub>in</sub>', 'indoor relative humidity', '', `${f0(r.RH)} %`) },
@@ -1175,10 +1177,10 @@ function processSteps() {
         return eq('E<sub>s</sub>', '≈ E<sub>gain</sub> + E<sub>env</sub> + E<sub>cd</sub> − E<sub>air</sub>', `${f1(E.gain)} + ${f1(E.env)} + ${f1(E.cd)} − ${f1(E.air)}`, `${f1(E.load)} kWh`) +
           eq('E<sub>OA</sub>', 'outdoor air after recovery', '', `${f1(E.oa)} kWh`) + eq('E<sub>coil,s</sub>', 'coil sensible', '', `${f1(E.coil)} kWh`) + eq('E<sub>l</sub>', 'room latent', '', `${f1(E.lat)} kWh`); } },
     { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
-      say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
-        return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
+      say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout), kind = season === 'summer' ? 'cooling' : 'heating';
+        return `A design day is the day of a season with the largest load: cooling for summer, heating for winter. A system sized for it meets every other day of that season. On this ${season} design day the largest ${kind} load of the room, ${kW(Math.abs(pk.loadS))}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
       eq: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
-        return eq('Q<sub>s,peak</sub>', `largest sensible load, at ${stepLabel(SB[season].peak_step)}`, '', kW(pk.loadS)) + eq('T<sub>out</sub>', 'outdoor air, lowest – highest', '', `${f1(T[0])} – ${f1(T[1])} °C`); } },
+        return eq('Q<sub>s,peak</sub>', `largest ${season === 'summer' ? 'cooling' : 'heating'} load of the room, at ${stepLabel(SB[season].peak_step)} (− = heating)`, '', kW(pk.loadS)) + eq('T<sub>out</sub>', 'outdoor air, lowest – highest', '', `${f1(T[0])} – ${f1(T[1])} °C`); } },
     { id: 'sunpos', g: 'Short-wave radiation', title: 'Solar position', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'],
       say: sunposSay,
       eq: r => eq('β, φ', 'solar altitude and azimuth', '', `${f1(r.alt)}° · ${f0(r.az)}°`) + eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) },
@@ -1262,10 +1264,10 @@ const roomSHR = r => r.loadS > 1 && r.loadL >= 0 ? f2(r.loadS / (r.loadS + r.loa
 // reading the other season without leaving it changed (rows are cached per season)
 function rowIn(se, i) { const k = season; try { season = se; return row(i); } finally { season = k; } }
 const peakStep = (f = x => x.loadS) => Math.round(argmax(x => season === 'summer' ? f(x) : -f(x)) * 20);   // largest cooling in summer, largest heating in winter
-function seasonStats(se) {   // largest hourly means (the winter load oscillates between steps), hours of heating
-  let max = -Infinity, min = Infinity, heat = 0, heatOcc = 0, acc = 0; const per = 60 / SB[se].step_min;
-  for (let i = 0; i < 480; i++) { const r = rowIn(se, i); acc += r.loadS; if ((i + 1) % per === 0) { max = Math.max(max, acc / per); min = Math.min(min, acc / per); acc = 0; } if (r.loadS < 0) { heat++; if (r.occ > .05) heatOcc++; } }
-  return { max, min, heatH: heat * SB[se].step_min / 60, heatEmpty: heat > 0 && !heatOcc }; }
+function seasonStats(se) {   // largest hourly means (the winter load oscillates between steps), hours of heating, and the same for the coil
+  let max = -Infinity, min = Infinity, heat = 0, heatOcc = 0, acc = 0, cmax = -Infinity, cmin = Infinity, cacc = 0; const per = 60 / SB[se].step_min;
+  for (let i = 0; i < 480; i++) { const r = rowIn(se, i); acc += r.loadS; cacc += r.coilS; if ((i + 1) % per === 0) { max = Math.max(max, acc / per); min = Math.min(min, acc / per); cmax = Math.max(cmax, cacc / per); cmin = Math.min(cmin, cacc / per); acc = cacc = 0; } if (r.loadS < 0) { heat++; if (r.occ > .05) heatOcc++; } }
+  return { max, min, cmax, cmin, heatH: heat * SB[se].step_min / 60, heatEmpty: heat > 0 && !heatOcc }; }
 const dayE = () => ({ gain: dayKWh(gainSI, 'gainSI'), env: dayKWh(envI, 'envI'), cd: dayKWh(massCd, 'massCd'), air: dayKWh(r => r.airStore, 'airStore'), load: dayKWh(r => r.loadS, 'loadS'),
   oa: dayKWh(r => r.oaAfter, 'oaAfter'), coil: dayKWh(r => r.coilS, 'coilS'), lat: dayKWh(r => r.loadL, 'loadL') });
 // steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
@@ -1488,8 +1490,8 @@ const CHAPTERS = [
   { k: 'system', name: 'System', ids: ['vent', 'coil', 'thermostat'],
     aim: 'What the system handles: outdoor air, heat recovery, the coil and the thermostat.',
     takeaway: 'The coil load is the room load plus the outdoor-air load after recovery; the thermostat decides when it heats or cools.',
-    q: 'On the winter day the outdoor air is near 2 °C. Why does the room need cooling in the afternoon?',
-    a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose; the ventilation air, cooler than the room after the heat recovery, removes the surplus while the coil is idle.' },
+    q: 'On the winter afternoon the outdoor air is at 5 to 7 °C. Why does the room have a cooling load?',
+    a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose. The ventilation air, cooler than the room even after the heat recovery, removes that surplus; the coil never cools, and at times it warms the supply air so that it does not remove too much.' },
   { k: 'results', name: 'Results', ids: ['peak', 'seasons', 'comfort', 'daySummary'],
     aim: "The design figures: peak load, the two seasons, comfort and the day's energy.",
     takeaway: 'The peak sensible and latent loads size the system; comfort is judged on the operative temperature.',
@@ -1558,6 +1560,28 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
   // concepts that cover the new chapters
   for (const [k, ids] of [['outdoor', ['sunpos', 'outdoor', 'skySolair']], ['moist', ['latent', 'moisture', 'coil']], ['sizing', ['designDay', 'peak', 'seasons', 'comfort']]]) {
     const c = CONCEPTS.find(x => x.k === k); if (!c || String(c.ids) !== String(ids)) bad.push(`concept ${k} missing or with other steps`); }
+  // final review: units, winter wording, check answers, link tooltip, coil in winter, estimated values
+  {
+    const keepS = season;
+    try {
+      season = 'summer'; const S1 = processSteps(), by = id => S1.find(x => x.id === id);
+      for (const id of ['outdoor', 'skySolair', 'thermostat', 'comfort']) { const h = chart24(by(id)); if (!h.includes('°C</text>') || / W<\/text>/.test(h)) bad.push(`${id}: graph not in °C`); }
+      chart24(by('outdoor')); if (!CH || CH.fmt(21.04) !== '21,0 °C') bad.push('outdoor: legend values not in °C');
+      if (!by('moisture').eq(row(300)).includes('tag est') || !seriesFor(by('moisture')).some(x => x.n.includes('(est.)'))) bad.push('moisture: hand-computed values not marked estimated');
+      if (!by('room').eq(row(300)).includes('tag est')) bad.push('room: effective glazing U not marked estimated');
+      season = 'winter'; const S2 = processSteps(), w = id => S2.find(x => x.id === id);
+      const dd = w('designDay'), ddr = row(SB.winter.peak_step), ddt = dd.say(ddr) + dd.eq(ddr);
+      if (!ddt.includes('largest heating load') || ddt.includes('largest sensible load')) bad.push('designDay: winter peak not described as heating');
+      const ss = w('seasons').say(row(300)); if (!/the coil (never cools|cools up to)/.test(ss) || !ss.includes('the coil heats')) bad.push('seasons: winter coil not described');
+      let lo = Infinity, hi = -Infinity; for (let i = 240; i <= 360; i++) { const T = row(i).Tout; lo = Math.min(lo, T); hi = Math.max(hi, T); }
+      const sy = CHAPTERS.find(c => c.k === 'system'); if (!sy.q.includes(`${f0(lo)} to ${f0(hi)} °C`) || sy.a.includes('while the coil is idle')) bad.push('system: check question or answer contradicts the winter data');
+    } catch (e) { bad.push(`final review checks: ${e.message}`); }
+    finally { season = keepS; }
+    try {
+      const tab = rightTab; openCondition('shr'); $('right').querySelector('.rscroll').dispatchEvent(new Event('scroll'));
+      if (tipKey !== 'shr') bad.push('See in Conditions: tooltip closed by its own scroll'); hideTip(); setRightTab(tab);
+    } catch (e) { bad.push(`link tooltip: ${e.message}`); }
+  }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
@@ -1728,12 +1752,12 @@ function go(i) {
   $('condLinks').hidden = !cl.length;
   $('condLinks').querySelectorAll('button').forEach(b => b.onclick = () => openCondition(b.dataset.k));
 }
-let linkedKey = '';
+let linkedKey = '', linkScrollUntil = 0;
 function openCondition(key) {   // switch to Conditions, bring the item into view, outline it (no animation) and open its explanation
   setRightTab('cond'); const r = S.r || row(Math.round(t * 20)); linkedKey = key;
   renderConditions(r); condKey = `${r.i}|${season}`;
   const el = $('condBody').querySelector(`[data-tip="${CSS.escape(key)}"]`); if (!el) return;
-  el.scrollIntoView({ block: 'nearest' }); showTip(el);
+  linkScrollUntil = performance.now() + 500; el.scrollIntoView({ block: 'nearest' }); showTip(el);
 }
 function setSeg(id, attr, val) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); }
 $('modeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; sortMode = b.dataset.mode; setSeg('modeSeg', 'mode', sortMode); steps = makeSteps(); go(0); };
@@ -2000,7 +2024,7 @@ $('right').addEventListener('mousemove', e => { const el = e.target.closest('[da
 $('right').addEventListener('mouseleave', hideTip);
 $('right').addEventListener('focusin', e => { const el = e.target.closest('[data-tip]'); if (el) showTip(el); });
 $('right').addEventListener('focusout', hideTip);
-$('right').addEventListener('scroll', hideTip, true);
+$('right').addEventListener('scroll', () => { if (performance.now() < linkScrollUntil) return; hideTip(); }, true);   // a link's own scroll keeps its tooltip
 addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
 let condKey = '', balKey = '';
 let rightTab = 'bal';
