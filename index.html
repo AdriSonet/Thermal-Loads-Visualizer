@@ -1063,7 +1063,7 @@ function dayChart() { return eq('Q<sub>load</sub>', 'later and lower than the ga
 function argmax(f) { let b = 0, bv = -Infinity; for (let i = 0; i < 480; i++) { const v = f(row(i)); if (v > bv) { bv = v; b = i; } } return b / 20; }
 function processSteps() {
   const hs = argmax(r => r.Qinc), hb = argmax(r => r.Qbeam), ho = argmax(r => r.occ * 1000 - Math.abs(r.i / 20 - 18)), hl = SB[season].peak_step / 20, hEve = 21;
-  return [
+  return inChapters([
     { id: 'sunpos', g: 'Short-wave radiation', title: 'Solar position', t0: 5, t1: 21, cam: 'sky', proc: ['sunPath', 'sunIn'], an: [], key: ['sun'],
       say: sunposSay,
       eq: r => eq('β, φ', 'solar altitude and azimuth', '', `${f1(r.alt)}° · ${f0(r.az)}°`) + eq('I<sub>b</sub>', 'direct normal irradiance', '', `${f0(r.DNI)} W/m²`) },
@@ -1131,7 +1131,12 @@ function processSteps() {
       say: airBalSay, eq: airBalEq },
     { id: 'gainload', g: 'Zone balance', title: 'Heat gain and cooling load', t0: hl, cam: 'overview', proc: ['lwNet', 'floorCond', 'system'], an: [], key: ['lw', 'ink'],
       say: gainLoadSay, eq: gainLoadEq },
-  ];
+  ]);
+}
+// the Story follows CHAPTERS; a step left out of every chapter stays at the end, where checkPath() reports it
+function inChapters(all) {
+  const by = new Map(all.map(x => [x.id, x]));
+  return [...CHAPTERS.flatMap(c => c.ids.filter(id => by.has(id)).map(id => ({ ...by.get(id), g: c.name }))), ...all.filter(x => chapterOf(x.id) < 0)];
 }
 const sunposSay = r => `The solar altitude β (angle above the horizon) and azimuth φ (direction from north) define the direction of the beam, and with it the angle of incidence on every surface and the sunlit area in the room. ` +
   (r.alt > 0 ? `At this time step β = ${f1(r.alt)}° and φ = ${f0(r.az)}°; the direct normal irradiance is ${f0(r.DNI)} W/m².` : 'At this time step the sun is below the horizon.');
@@ -1294,6 +1299,70 @@ const CONCEPTS = [
   { k: 'load', name: 'Heat gain and cooling load', def: 'Heat gain and load differ by the heat stored in the construction.',
     ids: ['floorbal', 'airbal', 'gainload'] },
 ];
+// the lecture: chapters in the order energy flows, each with its opening, closing and check question
+const CHAPTERS = [
+  { k: 'problem', name: 'The problem', ids: [],
+    aim: 'What a thermal load is, the room we study and the day we design for.',
+    takeaway: 'The sensible load is the heat the system must remove from the air to hold its temperature; it is calculated for a design day.',
+    q: 'Why is the room studied on its peak day and not on an average day?',
+    a: 'The system is sized for the largest load it must meet; an average day would undersize it.' },
+  { k: 'outdoor', name: 'Outdoor conditions', ids: ['sunpos'],
+    aim: 'The outdoor conditions that drive every flow: sun, air temperature, humidity and the sky.',
+    takeaway: 'The sun sets the short-wave input; the air and sky temperatures set the conduction and long-wave exchange of the envelope.',
+    q: "Why can the roof's outside face be about 25 K above the outdoor air at noon?",
+    a: 'It absorbs solar radiation: the sol-air temperature adds α·I/h<sub>o</sub> to the air temperature.' },
+  { k: 'envelope', name: 'Envelope', ids: ['incident', 'split', 'glassCond', 'opaque', 'infil'],
+    aim: 'How heat crosses the envelope: solar transmission, conduction through glazing and opaque elements, and infiltration.',
+    takeaway: 'Glazing transmits sun and conducts heat with no lag; opaque elements conduct with a lag that grows with mass; infiltration acts directly on the air.',
+    q: 'Why does heat leave through the glazing on a summer night when the outdoor air is warmer than the room?',
+    a: 'The outer pane radiates to a sky much colder than the air and becomes colder than the outdoor air.' },
+  { k: 'gains', name: 'Internal gains', ids: ['radPeople', 'radLights', 'radEquip', 'convInt', 'latent'],
+    aim: 'The heat from people, lights and equipment, and how it splits into radiant, convective and latent parts.',
+    takeaway: 'Convective gains are load at once; radiant gains reach the air only after surfaces absorb them; latent gains change humidity, not temperature.',
+    q: 'Two rooms have 2 kW of equipment each: screens (50 % radiant) in one, fan heaters (almost all convective) in the other. Which has the later load peak?',
+    a: 'The room with screens: their radiant half is absorbed by the surfaces first.' },
+  { k: 'surfaces', name: 'Surfaces', ids: ['beam', 'absorb', 'lw', 'floorbal', 'convSurf'],
+    aim: 'What happens at the room surfaces: absorption, long-wave exchange and convection to the air.',
+    takeaway: 'Each surface balances its flows at every time step; convection is the only path from a surface to the air.',
+    q: 'Where does the solar radiation absorbed by the floor go?',
+    a: 'Into the slab by conduction, to other surfaces by long-wave exchange and to the air by convection; the floor surface heat balance shows the split.' },
+  { k: 'storage', name: 'Storage', ids: ['slabcond', 'storage', 'discharge'],
+    aim: 'How the slab stores heat and releases it later.',
+    takeaway: 'Thermal mass delays and lowers the load peak: heat stored during the day is released at night.',
+    q: 'What reverses the heat flow in the slab in the evening?',
+    a: 'The floor surface becomes colder than the concrete below it, so the temperature gradient reverses.' },
+  { k: 'air', name: 'Room air', ids: ['airbal', 'gainload'],
+    aim: 'The heat and moisture balances of the room air, and the difference between heat gain and load.',
+    takeaway: 'The load is what reaches the air; it differs from the heat gain by the heat stored in the construction.',
+    q: 'When Q<sub>cd</sub> is negative, where is the difference between heat gain and load?',
+    a: 'Stored in the walls, roof and slab.' },
+  { k: 'system', name: 'System', ids: ['vent'],
+    aim: 'What the system handles: outdoor air, heat recovery, the coil and the thermostat.',
+    takeaway: 'The coil load is the room load plus the outdoor-air load after recovery; the thermostat decides when it heats or cools.',
+    q: 'On the winter day the outdoor air is near 2 °C. Why does the room need cooling in the afternoon?',
+    a: 'People, lights, equipment and sun add more heat than the envelope and infiltration lose.' },
+  { k: 'results', name: 'Results', ids: [],
+    aim: "The design figures: peak load, the two seasons, comfort and the day's energy.",
+    takeaway: 'The peak sensible and latent loads size the system; comfort is judged on the operative temperature.',
+    q: 'Why is the operative temperature above the air temperature at the summer peak?',
+    a: 'The sunlit floor and the warm glazing raise the mean radiant temperature above the air temperature.' },
+];
+const chapterOf = id => CHAPTERS.findIndex(c => c.ids.includes(id));
+function checkPath() {   // the lecture's structure: every chapter step exists, in order, under its chapter; concepts cite real steps
+  const bad = [], keep = season;
+  try {
+    for (const se of ['summer', 'winter']) {
+      season = se;
+      const st = processSteps(), ids = st.map(x => x.id), want = CHAPTERS.flatMap(c => c.ids);
+      for (const id of want) if (!ids.includes(id)) bad.push(`${se}: chapter step ${id} missing`);
+      if (ids.join() !== want.join()) bad.push(`${se}: steps not in chapter order`);
+      for (const x of st) { const c = chapterOf(x.id); if (c < 0 || x.g !== CHAPTERS[c].name) bad.push(`${se}: ${x.id} not under its chapter`); }
+      for (const c of CONCEPTS) for (const id of c.ids) if (!ids.includes(id)) bad.push(`concept ${c.k}: ${id} missing`);
+    }
+  } finally { season = keep; }
+  for (const c of CHAPTERS) for (const f of ['aim', 'takeaway', 'q', 'a']) if (!c[f]) bad.push(`chapter ${c.k}: no ${f}`);
+  return bad;
+}
 let conceptPick = 'solar';
 function conceptSteps(k = conceptPick) { const all = processSteps(), c = CONCEPTS.find(x => x.k === k); return c.ids.map(id => all.find(st => st.id === id)).filter(Boolean).map(st => ({ ...st, g: c.name })); }
 function makeSteps() { if (sortMode === 'concept') return conceptSteps(); return sortMode === 'element' ? elementSteps() : processSteps(); }
@@ -1862,7 +1931,7 @@ function audit() {
   }
   for (const L of LAYERS) L.begin(); LABS = []; season = keep.season; sortMode = keep.sortMode; elementPick = keep.elementPick; conceptPick = keep.conceptPick; S.r = keep.S_r;
   steps = makeSteps(); go(Math.min(cur, steps.length - 1)); chartKey = '';
-  return { checked: n, problems: [...new Set(bad)], arith: [...new Set(arith)] };
+  return { checked: n, problems: [...new Set([...bad, ...checkPath()])], arith: [...new Set(arith)] };
 }
 window.__dbg = { go, row: i => row(i), steps: () => steps, camera, controls, audit, renderConditions, seriesFor, sectionFor, ELEMENTS, conceptSteps, CONCEPTS };
 requestAnimationFrame(frame);
