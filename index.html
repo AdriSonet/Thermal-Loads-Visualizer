@@ -986,6 +986,8 @@ function seriesFor(st) {
   const M = {
     loadDef: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load), ser('Q<sub>l</sub> latent load', r => r.loadL, C.vap)], room: [],
     designDay: [ser('Q<sub>s</sub> sensible load', r => r.loadS, C.load)],
+    outdoor: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>air</sub> room air, °C', r => r.Tair, C.load)],
+    skySolair: [ser('T<sub>out</sub> outdoor air, °C', r => r.Tout, C.cond), ser('T<sub>sky</sub> sky, °C', r => r.Tsky, '#4b6ba9'), ser('T<sub>sa</sub> sol-air, roof (est.), °C', solAirRoof, C.sun), ser('T<sub>so</sub> roof outside face, °C', r => r.TsoRoof, C.ink)],
     sunpos: [ser('I<sub>b</sub> direct normal irradiance, W/m²', r => r.DNI, C.sun), ser('I<sub>inc</sub> incident irradiance, glazing plane, W/m²', r => r.Iinc, C.grey)],
         incident: [ser('Q<sub>inc</sub> incident solar on the glazing (A<sub>g</sub> = 27 m²)', r => r.Qinc, C.sun)],
     split: [ser('Q<sub>ρ</sub> reflected', r => r.Qref, C.grey), ser('Q<sub>α</sub> absorbed in the panes', r => r.Qabs, C.cond), ser('Q<sub>τ</sub> transmitted', r => r.Qtr, C.sun)],
@@ -1050,6 +1052,11 @@ const ABOUT = {
   'Q_{OA,0}': ['Outdoor-air load without recovery', 'Outdoor-air load without heat recovery, ṁ·c<sub>p</sub>·(T<sub>out</sub> − T<sub>in</sub>). Its difference from the load after recovery is the recovered heat.'],
   'Q_{inf}': ['Infiltration', 'Sensible heat of the outdoor air entering through gaps in the envelope. It bypasses the heat recovery and acts directly on the room air.'],
   'Q_{l}': ['Latent load', 'The rate of moisture removal required of the system, expressed as heat.'],
+  'T_{out}': ['Outdoor air temperature', 'Dry-bulb temperature of the outdoor air, measured in the shade.'],
+  'T_{air}': ['Room air temperature', 'Temperature of the room air, taken as well mixed; the quantity the system controls.'],
+  'T_{sky}': ['Sky temperature', 'Temperature of a black body that would emit the same long-wave radiation as the sky. It is not the sol-air temperature.'],
+  'T_{sa}': ['Sol-air temperature (estimated)', 'Outdoor air temperature that would give the roof outside face the same heat flow as the actual air temperature, absorbed sun and long-wave loss to the sky; estimated with h<sub>o</sub> = 17 W/m²K.'],
+  'T_{so}': ['Roof outside-face temperature', 'Simulated temperature of the roof membrane; the sol-air estimate should lie close to it.'],
   'Q_{gain}': ['Heat gain', 'Rate at which heat enters or is generated in the room: transmitted solar radiation plus the sensible heat of people, lights and equipment. The radiant part is absorbed by surfaces before it reaches the air.'],
   'Q_{env}': ['Glazing conduction and infiltration', 'Heat transferred by conduction through the glazing and by infiltration air. Neither path involves significant thermal mass, so both are load in the same time step. Negative when outdoors is colder.'],
   'Q_{s}': ['Sensible load', 'Rate at which the system must remove (positive) or supply (negative) sensible heat to hold the air temperature. It equals the sum of the other three curves minus the heat stored in the air: Q<sub>s</sub> = Q<sub>gain</sub> + Q<sub>env</sub> + Q<sub>cd</sub> − Q<sub>air</sub>.'],
@@ -1103,6 +1110,14 @@ function processSteps() {
           eq('U<sub>roof</sub>', 'light roof, 70 mm PIR', '', `${f2(uValue(SB.face_construction.Cubierta))} W/m²K`) +
           eq('U<sub>floor</sub>', 'slab on XPS, without the ground', '', `${f2(uValue(SB.face_construction.Suelo))} W/m²K`) +
           eq('U<sub>g</sub>', 'glazing, effective value from the simulation', '', `${f1(U_G)} W/m²K`); } },
+    { id: 'outdoor', g: '', title: 'Outdoor temperature and humidity', t0: 15, cam: 'sky', proc: ['sunPath'], an: [], key: [],
+      say: r => `The dry-bulb temperature is the air temperature measured in the shade. The humidity ratio w is the mass of water vapour per kilogram of dry air; it does not change when air is heated or cooled without condensation, so it is the quantity that ventilation and infiltration carry into the room. The relative humidity φ is the vapour pressure as a fraction of the saturation pressure at the air temperature. Now: ${f1(r.Tout)} °C, ${f1(r.wOut * 1000)} g/kg, ${f0(rhOf(r.Tout, r.wOut) * 100)} %.`,
+      eq: r => eq('T<sub>out</sub>', 'outdoor dry-bulb temperature', '', `${f1(r.Tout)} °C`) + eq('w<sub>out</sub>', 'outdoor humidity ratio', '', `${f1(r.wOut * 1000)} g/kg`) + eq('φ<sub>out</sub>', 'outdoor relative humidity', '', `${f0(rhOf(r.Tout, r.wOut) * 100)} %`) },
+    { id: 'skySolair', g: '', title: 'Sky and sol-air temperature', t0: 13, cam: 'sky', proc: ['sunPath'], an: [], key: ['sun'],
+      say: r => `The sky temperature is the temperature of a black body that would emit the same long-wave radiation as the sky; a clear, dry sky is much colder than the air. The sol-air temperature belongs to one surface: it is the outdoor air temperature that would produce the same heat flow at its outside face as the actual combination of air temperature, absorbed solar radiation and long-wave exchange with the sky. Now, for the roof: sky ${f1(r.Tsky)} °C, sol-air ${f1(solAirRoof(r))} °C (estimated), simulated outside face ${f1(r.TsoRoof)} °C.`,
+      eq: r => { const a = ROOF_OUT.solar_absorptance * r.incRoof / H_O, l = ROOF_OUT.thermal_absorptance * SIGMA * ((r.Tout + 273.15) ** 4 - (r.Tsky + 273.15) ** 4) / H_O;
+        return eq('T<sub>sa</sub>', '≈ T<sub>out</sub> + α·I/h<sub>o</sub> − ε·σ·(T<sub>out</sub>⁴ − T<sub>sky</sub>⁴)/h<sub>o</sub>', `${f1(r.Tout)} + ${f1(a)} − ${f1(l)}`, `${f1(solAirRoof(r))} °C`, 'est') +
+          eq('T<sub>sky</sub>', 'sky temperature', '', `${f1(r.Tsky)} °C`) + eq('T<sub>so,roof</sub>', 'roof outside face, simulated', '', `${f1(r.TsoRoof)} °C`); } },
     { id: 'designDay', g: '', title: 'The design day', t0: SB[season].peak_step / 20, cam: 'overview', proc: ['sunPath'], an: [], key: ['sun'],
       say: r => { const pk = row(SB[season].peak_step), T = dayRange(x => x.Tout);
         return `A design day is the day of a season with the largest load; a system sized for it meets every other day of that season. On this ${season} design day the largest sensible load, ${kW(Math.abs(pk.loadS))} of ${pk.loadS >= 0 ? 'cooling' : 'heating'}, occurs at ${stepLabel(SB[season].peak_step)}. The outdoor air ranges from ${f1(T[0])} to ${f1(T[1])} °C.`; },
@@ -1181,7 +1196,7 @@ function processSteps() {
 const COND_LABEL = { tout: 'Dry-bulb temperature', humOut: 'Outdoor humidity', tsky: 'Sky temperature', solair: 'Sol-air temperature', sun: 'Sun', dni: 'Direct normal', dhi: 'Diffuse horizontal',
   tair: 'Air temperature', mrt: 'Mean radiant', top: 'Operative', humIn: 'Indoor humidity', oa: 'Outdoor air', infil: 'Infiltration', people: 'People', lights: 'Lights', equip: 'Equipment',
   sensInt: 'Sensible internal gains', latInt: 'Latent internal gains', radShare: 'Radiant share', shr: 'Sensible heat ratio' };
-const COND_OF = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
+const COND_OF = { outdoor: ['tout', 'humOut'], skySolair: ['tsky', 'solair'], sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
   convInt: ['sensInt'], latent: ['latInt', 'shr', 'humIn'], lw: ['mrt'], airbal: ['tair'], vent: ['oa'] };
 const withCond = list => list.map(x => !x.cond && COND_OF[x.id] ? { ...x, cond: COND_OF[x.id] } : x);
 // steady-state U-value of a layered construction: R_si + Σ d/λ + R_se (walls 0,13 + 0,04; roof 0,10 + 0,04; slab on ground 0,17, the ground left out)
@@ -1365,7 +1380,7 @@ const CHAPTERS = [
     takeaway: 'The sensible load is the heat the system must remove from the air to hold its temperature; it is calculated for a design day.',
     q: 'Why is the room studied on its peak day and not on an average day?',
     a: 'The system is sized for the largest load it must meet; an average day would undersize it.' },
-  { k: 'outdoor', name: 'Outdoor conditions', ids: ['sunpos'],
+  { k: 'outdoor', name: 'Outdoor conditions', ids: ['sunpos', 'outdoor', 'skySolair'],
     aim: 'The outdoor conditions that drive every flow: sun, air temperature, humidity and the sky.',
     takeaway: 'The sun sets the short-wave input; the air and sky temperatures set the conduction and long-wave exchange of the envelope.',
     q: "Why can the roof's outside face be about 25 K above the outdoor air at noon?",
@@ -1446,6 +1461,8 @@ function checkPath() {   // the lecture's structure: every chapter step exists, 
     const keepS = season; season = 'summer'; const dd = processSteps().find(x => x.id === 'designDay'); season = keepS;
     if (!dd || dd.t0 !== SB.summer.peak_step / 20) bad.push('designDay does not open on the summer peak');
   } catch (e) { bad.push(`chapter 0: ${e.message}`); }
+  // chapter 1: at night the roof sol-air temperature falls below the air (long-wave loss to the sky)
+  try { const keepS = season; season = 'summer'; const r3 = row(60); season = keepS; if (!(solAirRoof(r3) < r3.Tout)) bad.push('sol-air not below the air at 03:00'); } catch (e) { bad.push(`chapter 1: ${e.message}`); }
   // links from steps to the Conditions panel
   try {
     const want = { sunpos: ['sun', 'dni'], incident: ['dni', 'dhi'], glassCond: ['tout', 'tsky'], opaque: ['solair'], infil: ['infil'], radPeople: ['people', 'radShare'], radLights: ['lights'], radEquip: ['equip'],
