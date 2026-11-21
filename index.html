@@ -2228,14 +2228,14 @@ function audit() {
 window.__dbg = { go, row: i => row(i), steps: () => steps, camera, controls, audit, renderConditions, seriesFor, sectionFor, ELEMENTS, conceptSteps, CONCEPTS };
 if (!CAPTURE) requestAnimationFrame(frame);
 else {   // capture API for the class video: shot() sets up a shot and settles it, tick() advances 1/30 s and returns the frame
-  const camOf = c => typeof c === 'string' ? CAM[c] : { p: V(...c.p), t: V(...c.t) };
+  const camOf = (c, d = 1) => { const q = typeof c === 'string' ? CAM[c] : { p: V(...c.p), t: V(...c.t) }; return q && { p: q.t.clone().lerp(q.p, d), t: q.t.clone() }; };   // d > 1 pulls the camera back along its line of sight
   let shotSpec = null, k = 0, A = null, B = null;
   const place = u => { const e = ease(clamp(u)); camera.position.copy(A.p).lerp(B.p, e); controls.target.copy(A.t).lerp(B.t, e); };
   const step = () => { const now = last + 1000 / 30; frame(now); };
   window.__cap = {
     ready: Promise.resolve(),
     shot(spec) {
-      shotSpec = spec; A = camOf(spec.cam.from); B = camOf(spec.cam.to);
+      shotSpec = spec; A = camOf(spec.cam.from, spec.dist ?? 1); B = camOf(spec.cam.to, spec.dist ?? 1);
       if (!A || !B) throw new Error(`unknown camera ${JSON.stringify(spec.cam)}`);
       if (season !== spec.season) { season = spec.season; lastI = -1; fieldKey = ''; legendKey = ''; floorKey = ''; }
       steps = [{ id: 'capture', g: 'Capture', title: '', t0: spec.i / 20, t1: 0, cam: 'room', proc: spec.proc, an: spec.an || [], k: spec.focus?.[0], say: () => '', eq: () => '' }];
