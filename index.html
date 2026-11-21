@@ -210,6 +210,7 @@
   #bal .tot .x { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
   #bal .tot .big { font-size: 18px; letter-spacing: -.01em; }
   body.clean #right { display: none; }
+  body.capture > *:not(#c) { display: none !important; }
   #fps { position: fixed; z-index: 3; right: 18px; bottom: calc(var(--bar-h) + 10px); font: 11px "IBM Plex Mono", monospace; color: #a29d95; }
 
   /* ---- transport bar */
@@ -389,6 +390,8 @@ const CELL = .25, NX = W / CELL, NZ = D / CELL;
 
 // ================================================================ the data (EnergyPlus timestep, held per step)
 let season = 'summer';
+const CAPTURE = new URLSearchParams(location.search).has('capture');   // class video: frames on demand, no interface (window.__cap)
+if (CAPTURE) document.body.classList.add('clean', 'capture');
 const FACES = ['Suelo', 'Muro_N', 'Muro_E', 'Muro_S', 'Muro_W', 'Cubierta'];
 const OPAQUE = ['Muro_N', 'Muro_S', 'Muro_E', 'Muro_W', 'Cubierta'];   // the opaque envelope above ground
 const floorCons = SB.constructions[SB.face_construction.Suelo];
@@ -897,7 +900,7 @@ const PROC = {
 // ================================================================ labels & annotations
 const labelsEl = document.getElementById('labels');
 let LABS = [];
-const label = (p, html, est = false) => LABS.push({ p, html, est });
+const label = (p, html, est = false) => { if (!CAPTURE) LABS.push({ p, html, est }); };
 function drawLabels() {
   while (labelsEl.children.length < LABS.length) { const d = document.createElement('div'); d.className = 'lab'; labelsEl.appendChild(d); }
   [...labelsEl.children].forEach((el, i) => {
@@ -2152,7 +2155,7 @@ function frame(now) {
   if (tipKey && tipI !== `${i}|${season}`) renderTip();
   const cdk = `${i}|${season}`; if (rightTab === 'cond' && cdk !== condKey) { condKey = cdk; renderConditions(r); }
   const ck = `${cur}|${i}|${season}`;
-  if (ck !== cardKey) {
+  if (!CAPTURE && ck !== cardKey) {
     cardKey = ck; $('cS').innerHTML = s.say(r);
     const tmpD = document.createElement('div'); tmpD.innerHTML = s.eq(r);
     const kp = [...tmpD.querySelectorAll('.kpi')], fm = [...tmpD.children].filter(e => e.classList.contains('eq'));
@@ -2169,7 +2172,7 @@ function frame(now) {
     if (dyn !== dynHTML) { dynHTML = dyn; $('cDyn').innerHTML = dyn; }
     chartTick(r);
   }
-  controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
+  controls.update(); renderer.render(scene, camera); if (!CAPTURE) requestAnimationFrame(frame);
 }
 go(0);
 // self-check: every step of every mode, both seasons, every 30 min: no NaN/undefined in the card text, no throw
@@ -2223,7 +2226,30 @@ function audit() {
   return { checked: n, problems: [...new Set([...bad, ...checkPath()])], arith: [...new Set(arith)] };
 }
 window.__dbg = { go, row: i => row(i), steps: () => steps, camera, controls, audit, renderConditions, seriesFor, sectionFor, ELEMENTS, conceptSteps, CONCEPTS };
-requestAnimationFrame(frame);
+if (!CAPTURE) requestAnimationFrame(frame);
+else {   // capture API for the class video: shot() sets up a shot and settles it, tick() advances 1/30 s and returns the frame
+  const camOf = c => typeof c === 'string' ? CAM[c] : { p: V(...c.p), t: V(...c.t) };
+  let shotSpec = null, k = 0, A = null, B = null;
+  const place = u => { const e = ease(clamp(u)); camera.position.copy(A.p).lerp(B.p, e); controls.target.copy(A.t).lerp(B.t, e); };
+  const step = () => { const now = last + 1000 / 30; frame(now); };
+  window.__cap = {
+    ready: Promise.resolve(),
+    shot(spec) {
+      shotSpec = spec; A = camOf(spec.cam.from); B = camOf(spec.cam.to);
+      if (!A || !B) throw new Error(`unknown camera ${JSON.stringify(spec.cam)}`);
+      if (season !== spec.season) { season = spec.season; lastI = -1; fieldKey = ''; legendKey = ''; floorKey = ''; }
+      steps = [{ id: 'capture', g: 'Capture', title: '', t0: spec.i / 20, t1: 0, cam: 'room', proc: spec.proc, an: spec.an || [], k: spec.focus?.[0], say: () => '', eq: () => '' }];
+      cur = 0; t = spec.i / 20; playing = false; from = null; lastI = -1; floorDirty = true;
+      CLK = 0; stepClock = 0; last = 0;
+      for (let n = 0; n < 80; n++) { place(0); frame(last + 100); }   // eased states (wall fade, floor colours, diffuse light) settle to their targets: 8 s at dt 0,1
+      CLK = 0; stepClock = 0; k = 0;
+    },
+    tick() {
+      place(k / Math.max(1, shotSpec.dur - 1)); step(); k++;
+      return canvas.toDataURL('image/jpeg', .95);
+    },
+  };
+}
 </script>
 </body>
 </html>
