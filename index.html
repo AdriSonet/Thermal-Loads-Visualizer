@@ -65,6 +65,8 @@
   #steps .sub.nest .el { font-weight: 400; }
   .nav-foot { padding: 10px 0 12px; border-top: 1px solid var(--line-2); display: grid; gap: 8px; }
   .nav-foot .src { margin: 0 16px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .nav-foot .syslink { margin: 0 12px; padding: 7px 10px; border-radius: var(--r-ctl); background: var(--chip); font-size: 13px; font-weight: 500; color: var(--ink); text-decoration: none; }
+  .nav-foot .syslink:hover { background: #e8e4dc; }
   .rail { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
   .rail .pos { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   body.navclosed #nav { width: 56px; }
@@ -265,6 +267,7 @@
   <div class="nav-foot">
     <div class="seg" id="seasonSeg"><button data-s="summer" class="on">Summer peak</button><button data-s="winter">Winter peak</button></div>
     <p class="src">Shoebox, Zaragoza · simulated design days, 3-minute steps</p>
+    <a class="syslink" href="systems.html">Systems: coils, air handling, recovery →</a>
   </div>
   <div class="rail">
     <button class="icon" id="navOpen" aria-label="Open the navigator (L)" title="Open (L)"><svg class="i"><use href="#i-panel"/></svg></button>
