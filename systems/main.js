@@ -29,7 +29,7 @@ function controlHtml(key) {
     toc.insertAdjacentHTML('beforeend', `<li><a href="#ch-${ch.id}">${ch.title}</a></li>`);
     ch.steps.forEach(st => {
       const el = document.createElement('section'); el.className = 'step';
-      el.innerHTML = `<h3>${st.title}</h3><p class="say">${st.say}</p>${st.body ?? ''}<div class="facts"></div><div class="tbl"></div><div class="warn" role="status"></div>
+      el.innerHTML = `<h3>${st.title}</h3><p class="say">${st.say}</p>${st.body ?? ''}<div class="facts"></div><div class="loads"></div><div class="tbl"></div><div class="warn" role="status"></div>
         ${st.controls?.length ? `<div class="ctls">${st.controls.map(controlHtml).join('')}<button type="button" class="reset">Reset to the lounge's conditions</button></div>` : ''}
         <details class="more"><summary>method &amp; checks</summary><div class="mb"></div></details>`;
       col.appendChild(el); steps.push({ ...st, el, ci, ch });
@@ -72,22 +72,38 @@ function drawScene(t) {
   try { SCENES[R.scene.name](D, R.scene, t); } catch (e) { if (!drawScene.err) console.error('scene', R.scene.name, e); drawScene.err = true; }
 }
 const chart = createChart($('chart'));
-chart.onProbe(s => { S.probeT = Math.round(s.T * 2) / 2; S.probeRH = Math.max(5, Math.min(100, Math.round(s.w / wSatAt(S.probeT) * 100))); syncControls(); update(); });
+chart.onProbe(s => { S.probeT = Math.round(s.T * 2) / 2; S.probeRH = Math.max(2, Math.min(100, Math.round(s.w / wSatAt(S.probeT) * 100))); syncControls(); update(); });
 chart.onHover(s => { $('chartRead').textContent = s ? chart.describe(s) : ''; });
 import { wSat as wSatAt } from './psychro.js';
 
 // ---------------------------------------------------------------- balance bar
+const kw = (v, d) => fx(Math.abs(v) / 1000, d ?? (Math.abs(v) < 9950 ? 2 : 1));
+const signed = (v, d) => (Math.abs(v) < 5 ? '' : v > 0 ? '+' : '−') + kw(v, d);
 function balance(b) {
   const box = $('balance'); box.dataset.empty = b ? 0 : 1; if (!b) { $('balTitle').textContent = 'Energy balance'; $('balSub').textContent = 'appears when a process changes the air'; return; }
-  const dS = b.m * (CP_AIR + b.a.w * CP_VAP) * (b.b.T - b.a.T), dT = b.m * (h(b.b.T, b.b.w) - h(b.a.T, b.a.w)), dL = dT - dS, dw = b.b.w - b.a.w;
-  const scale = Math.max(Math.abs(dS), Math.abs(dL), Math.abs(dT), 1);
-  const sign = v => (Math.abs(v) < 5 ? '' : v > 0 ? '+' : '−') + fx(Math.abs(v) / 1000, Math.abs(v) < 9950 ? 2 : 1);
-  const set = (id, v) => { $(id).innerHTML = `${sign(v)} <small>kW</small>`; const bar = $(id + 'b'), w = Math.abs(v) / scale * 50; bar.style.width = w + '%'; bar.style.left = (v < 0 ? 50 - w : 50) + '%'; };
+  // from the air's point of view: negative is heat leaving the air
+  let dS, dL, perKg = null, dw = null, kgh;
+  if (b.q) { dS = b.q.s; dL = b.q.l; kgh = b.kgh ?? 0; }
+  else { dS = b.m * (CP_AIR + b.a.w * CP_VAP) * (b.b.T - b.a.T); const dT = b.m * (h(b.b.T, b.b.w) - h(b.a.T, b.a.w)); dL = dT - dS; perKg = dT / b.m; dw = b.b.w - b.a.w; kgh = (b.water ?? dw * b.m) * 3600; }
+  const dT = dS + dL, aS = Math.abs(dS), aL = Math.abs(dL), sum = Math.max(aS + aL, 1), same = dS * dL >= 0 || aS < 5 || aL < 5;
   $('balTitle').textContent = b.title; $('balSub').textContent = b.sub ?? '';
-  set('bS', dS); set('bL', dL); set('bT', dT);
-  $('bH').innerHTML = `${(dT / b.m) > 50 ? '+' : (dT / b.m) < -50 ? '−' : ''}${fx(Math.abs(dT / b.m) / 1000, 1)} <small>kJ/kg</small>`;
-  const kgh = (b.water ?? dw * b.m) * 3600;
-  $('bW').innerHTML = `${Math.abs(dw) < 5e-6 ? '' : dw > 0 ? '+' : '−'}${fx(Math.abs(dw) * 1000, 2)} <small>g/kg · ${fx(Math.abs(kgh), Math.abs(kgh) < 10 ? 2 : 1)} kg/h</small>`;
+  $('bT').innerHTML = `${signed(dT)} <small>kW</small>`; $('bS').innerHTML = `${signed(dS)} <small>kW</small>`; $('bL').innerHTML = `${signed(dL)} <small>kW</small>`;
+  const [iS, iL] = $('bStack').children; iS.style.width = aS / sum * 100 + '%'; iL.style.width = aL / sum * 100 + '%';
+  iS.className = 's' + (!same && dS * dT < 0 ? ' neg' : ''); iL.className = 'l' + (!same && dL * dT < 0 ? ' neg' : '');
+  $('bShare').textContent = aS + aL < 10 ? 'no change' : same ? `${Math.round(aS / sum * 100)} % sensible · ${Math.round(aL / sum * 100)} % latent` : 'sensible and latent pull in opposite directions';
+  $('bH').innerHTML = perKg == null ? '—' : `${perKg > 50 ? '+' : perKg < -50 ? '−' : ''}${fx(Math.abs(perKg) / 1000, 1)} <small>kJ/kg</small>`;
+  $('bW').innerHTML = dw == null ? `${fx(Math.abs(kgh), Math.abs(kgh) < 10 ? 2 : 1)} <small>kg/h condensed</small>`
+    : `${Math.abs(dw) < 5e-6 ? '' : dw > 0 ? '+' : '−'}${fx(Math.abs(dw) * 1000, 2)} <small>g/kg · ${fx(Math.abs(kgh), Math.abs(kgh) < 10 ? 2 : 1)} kg/h</small>`;
+}
+// rows of loads in the step card: sensible + latent = total, on one common scale
+function loadsHtml(rows) {
+  if (!rows?.length) return '';
+  const max = Math.max(...rows.map(r => Math.abs(r.s) + Math.abs(r.l)), 1);
+  const num = v => (v < -5 ? '−' : '') + fx(Math.abs(v) / 1000, 1);
+  return `<div class="lh"><b>Loads, kW</b><span><i class="sw s"></i>sensible + <i class="sw l"></i>latent = total</span></div>` + rows.map(r => {
+    const t = r.s + r.l;
+    return `<div class="lr${r.strong ? ' strong' : ''}${r.total ? ' total' : ''}"><span>${r.label}</span><span class="lb"><i class="s${r.s < 0 ? ' neg' : ''}" style="width:${Math.abs(r.s) / max * 100}%"></i><i class="l${r.l < 0 ? ' neg' : ''}" style="width:${Math.abs(r.l) / max * 100}%"></i></span><span class="lv"><small>${num(r.s)} + ${num(r.l)} = </small><b>${num(t)}</b></span></div>`;
+  }).join('');
 }
 
 // ---------------------------------------------------------------- update
@@ -99,6 +115,7 @@ function update() {
   $('sceneCap').textContent = R.cap ?? ''; $('sceneNote').textContent = 'calculated on this page, simplified model';
   canvas.setAttribute('aria-label', `${R.cap ?? st.title}. ${(R.facts ?? []).map(f => `${f[2]}: ${f[0]} ${f[1]}`).join('; ')}`);
   st.el.querySelector('.facts').innerHTML = (R.facts ?? []).map(([v, u, k, cls]) => `<div class="fact ${cls ?? ''}"><div class="v num">${v}${u ? ` <small>${u}</small>` : ''}</div><div class="k">${k}</div></div>`).join('');
+  st.el.querySelector('.loads').innerHTML = loadsHtml(R.loads);
   st.el.querySelector('.tbl').innerHTML = R.table ?? '';
   st.el.querySelector('.warn').textContent = R.warn ?? '';
   for (const [id, html] of Object.entries(R.text ?? {})) { const e = document.getElementById(id); if (e) e.innerHTML = html; }

@@ -97,7 +97,7 @@ export function coil({ air, mAir, water, geo, p = P_SITE }) {
     adp = bisect(T => wSat(T, p) - (out.w - slope * (out.T - T)), -5, out.T, 40);
   }
   const bypass = Math.abs(air.T - adp) > 1e-6 ? clamp((out.T - adp) / (air.T - adp), 0, 1) : 1;
-  return { out, path: m.path, qSens, qLat, qTot, qWater, condensate: m.cond, waterOut: Two, tsMean: m.tsMean, adp, bypass, wetFrac: m.wet,
+  return { out, mAir, path: m.path, qSens, qLat, qTot, qWater, condensate: m.cond, waterOut: Two, tsMean: m.tsMean, adp, bypass, wetFrac: m.wet,
     R, etaF, etaO, ha, hi: hw.hi, waterVel: hw.vel, waterRe: hw.Re, faceVel, heating,
     area: { air: G.airArea, tube: G.tubeArea, fin: G.finArea }, geo: G,
     closure: Math.abs(qTot) > 1 ? (qTot - qDrain - qWater) / qTot : 0 };
@@ -145,7 +145,10 @@ export function mix(a, ma, b, mb) {
 // ---------------------------------------------------------------- room with a fan coil
 // A valve throttles the water so the coil removes exactly the sensible load at the set point;
 // the room humidity is left free and settles where condensate = moisture gain.
-export function fanCoilRoom({ loadS, loadL, setpoint, water, geo, mAir, volume = 384, w0, p = P_SITE, steps = 36, dt = 150 }) {
+// `vent` is outdoor air arriving from the air handling unit at its own state: it adds or removes heat and water.
+export function fanCoilRoom({ loadS, loadL, setpoint, water, geo, mAir, volume = 384, w0, vent = null, p = P_SITE, steps = 36, dt = 150 }) {
+  const roomS = loadS, ventW = w => vent ? vent.m * (vent.w - w) : 0;
+  if (vent) loadS = Math.max(200, loadS + vent.m * (CP_AIR + vent.w * CP_VAP) * (vent.T - setpoint));
   const gain = loadL / (H_FG0 + CP_VAP * setpoint);                  // kg/s of vapour released in the room
   const wMax = wFromRh(setpoint, 0.98, p);
   const solve = w => {
@@ -158,12 +161,12 @@ export function fanCoilRoom({ loadS, loadL, setpoint, water, geo, mAir, volume =
     return { c: run(f), valve: f / water.flowMax, met: true };
   };
   // net drying rate (condensate − gain) on a grid of room humidities: increasing in w
-  const GRID = 10, w1 = 0.003, tab = Array.from({ length: GRID }, (_, i) => { const w = w1 + (wMax - w1) * i / (GRID - 1); return { w, n: solve(w).c.condensate - gain }; });
+  const GRID = 10, w1 = 0.003, tab = Array.from({ length: GRID }, (_, i) => { const w = w1 + (wMax - w1) * i / (GRID - 1); return { w, n: solve(w).c.condensate - gain - ventW(w) }; });
   const net = w => { const u = clamp((w - w1) / (wMax - w1), 0, 1) * (GRID - 1), i = Math.min(GRID - 2, Math.floor(u)); return tab[i].n + (tab[i + 1].n - tab[i].n) * (u - i); };
   const k = tab.findIndex(t => t.n > 0);
   let weq;
   if (k < 0) weq = wMax; else if (k === 0) weq = w1;
-  else weq = bisect(w => solve(w).c.condensate - gain, tab[k - 1].w, tab[k].w, 12, 1e-4);
+  else weq = bisect(w => solve(w).c.condensate - gain - ventW(w), tab[k - 1].w, tab[k].w, 12, 1e-4);
   const at = solve(weq);
   // room temperature only drifts if the coil cannot meet the load even with the valve fully open
   let Teq = setpoint;
@@ -175,7 +178,7 @@ export function fanCoilRoom({ loadS, loadL, setpoint, water, geo, mAir, volume =
     for (let j = 0; j < 5; j++) w = clamp(w - net(w) * dt / 5 / mRoom, w1, wMax);
     if ((w - weq) * (series[i].w - weq) < 0) w = weq;                // the table is coarse: do not step over the equilibrium
   }
-  return { eq: { T: Teq, w: weq, rh: rhFromW(Teq, weq, p) }, valve: at.valve, met: at.met, coil: at.c, series, gain, humid: weq >= wMax - 1e-7 };
+  return { eq: { T: Teq, w: weq, rh: rhFromW(Teq, weq, p) }, valve: at.valve, met: at.met, coil: at.c, series, gain, humid: weq >= wMax - 1e-7, coilS: loadS, roomS, ventWater: ventW(weq) };
 }
 
 // ---------------------------------------------------------------- primary-air handling unit

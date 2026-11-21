@@ -61,20 +61,41 @@
   #viewSeg { display: none; }
   @media (min-width: 1700px) { #views { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: 1fr; } }
 
-  /* ---- balance bar */
-  #balance { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 9px 14px 10px; display: grid; grid-template-columns: minmax(150px, 1.1fr) repeat(5, auto); gap: 4px 22px; align-items: end; min-height: 62px; }
+  /* ---- balance bar: total = sensible + latent */
+  #balance { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 9px 16px 10px; display: grid; grid-template-columns: minmax(130px, 1fr) auto minmax(120px, 1.2fr) auto auto; gap: 4px 24px; align-items: center; min-height: 64px; }
   #balance[data-empty="1"] > :not(.bt) { visibility: hidden; }
-  #balance .bt { font-size: 12px; color: var(--muted); line-height: 1.35; align-self: center; }
+  #balance .bt { font-size: 12px; color: var(--muted); line-height: 1.35; }
   #balance .bt b { display: block; color: var(--ink); font-size: 13px; font-weight: 600; }
+  .beq { display: flex; align-items: flex-end; gap: 12px; }
+  .beq .op { font-size: 17px; color: var(--muted); padding-bottom: 1px; }
   .bcell { min-width: 0; }
   .bcell .k { font-size: 11.5px; color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 5px; }
   .bcell .v { font-size: 16px; font-weight: 500; white-space: nowrap; }
+  .bcell.tot .v { font-size: 21px; font-weight: 600; line-height: 1.1; }
   .bcell .v small { font-size: 11.5px; color: var(--muted); font-weight: 400; }
-  .bcell .bar { height: 5px; margin-top: 4px; background: var(--line-2); border-radius: 3px; position: relative; width: 104px; }
-  .bcell .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-  .bcell .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #a29d95; }
+  .bstack .bar, .lb { display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: var(--line-2); }
+  .bstack .bar i, .lb i { display: block; height: 100%; flex: none; }
+  i.s { background: var(--hot); }
+  i.l { background: repeating-linear-gradient(135deg, var(--vap) 0 2px, #fff 2px 5px); box-shadow: inset 0 0 0 1px var(--vap); }
+  i.s.neg { background: #fff; box-shadow: inset 0 0 0 1.5px var(--hot); }
+  i.l.neg { background: #fff; box-shadow: inset 0 0 0 1.5px var(--vap); }
+  .bstack .cap { font-size: 11.5px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .sw.s { background: var(--hot); } .sw.l { background: repeating-linear-gradient(135deg, var(--vap) 0 2px, #fff 2px 4px); outline: 1px solid var(--vap); outline-offset: -1px; } .sw.t { background: var(--ink); }
+
+  /* ---- load strip inside a step: one row per load, sensible + latent = total */
+  .loads { margin: 12px 0; padding: 10px 12px 8px; background: var(--chip); border-radius: var(--r-ctl); }
+  .loads:empty { display: none; }
+  .loads .lh { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+  .loads .lh span { display: flex; align-items: center; gap: 5px; }
+  .lr { display: grid; grid-template-columns: minmax(96px, 34%) 1fr auto; gap: 10px; align-items: center; padding: 4px 0; font-size: 12.5px; color: var(--ink-2); }
+  .lr + .lr { border-top: 1px solid rgba(0,0,0,.05); }
+  .lr .lb { background: rgba(255,255,255,.7); height: 11px; }
+  .lr .lv { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; min-width: 118px; }
+  .lr .lv small { color: var(--muted); font-size: 10.5px; }
+  .lr.strong { color: var(--ink); font-weight: 500; }
+  .lr.total { border-top: 1.5px solid var(--ink); margin-top: 3px; padding-top: 6px; font-weight: 600; }
+  .lr.total .lv b { font-size: 14px; }
 
   /* ---- text column */
   #steps { padding: 0 22px 30vh 18px; min-width: 0; }
@@ -140,9 +161,9 @@
     #viewSeg { display: grid; position: absolute; right: 16px; top: 14px; z-index: 3; padding: 2px; }
     #viewSeg button { padding: 4px 9px; font-size: 12px; }
     .pane .cap small { display: none; }
-    #balance { grid-template-columns: repeat(3, 1fr); gap: 2px 10px; padding: 6px 10px; min-height: 0; }
-    #balance .bt, .bcell.x { display: none; }
-    .bcell .v { font-size: 14px; } .bcell .bar { width: 100%; }
+    #balance { grid-template-columns: 1fr; gap: 4px; padding: 6px 10px; min-height: 0; }
+    #balance .bt, .bcell.x, .bstack .cap { display: none; }
+    .beq { justify-content: space-between; gap: 6px; } .bcell .v { font-size: 14px; } .bcell.tot .v { font-size: 16px; } .bstack .bar { height: 7px; }
     #steps { padding: 0 12px 40vh; }
     .step { margin-bottom: 30vh; scroll-margin-top: 56vh; }
     .chapter-head { padding-top: 14vh; }
@@ -177,9 +198,14 @@
     </div>
     <div id="balance" data-empty="1" aria-live="off">
       <div class="bt"><b id="balTitle"></b><span id="balSub"></span></div>
-      <div class="bcell"><div class="k"><i class="sw s"></i>Sensible</div><div class="v num" id="bS"></div><div class="bar"><i id="bSb" style="background:var(--hot)"></i></div></div>
-      <div class="bcell"><div class="k"><i class="sw l"></i>Latent</div><div class="v num" id="bL"></div><div class="bar"><i id="bLb" style="background:var(--vap)"></i></div></div>
-      <div class="bcell"><div class="k"><i class="sw t"></i>Total</div><div class="v num" id="bT"></div><div class="bar"><i id="bTb" style="background:var(--ink)"></i></div></div>
+      <div class="beq">
+        <div class="bcell tot"><div class="k"><i class="sw t"></i>Total</div><div class="v num" id="bT"></div></div>
+        <span class="op">=</span>
+        <div class="bcell"><div class="k"><i class="sw s"></i>Sensible</div><div class="v num" id="bS"></div></div>
+        <span class="op">+</span>
+        <div class="bcell"><div class="k"><i class="sw l"></i>Latent</div><div class="v num" id="bL"></div></div>
+      </div>
+      <div class="bstack"><div class="bar" id="bStack"><i class="s"></i><i class="l"></i></div><div class="cap" id="bShare"></div></div>
       <div class="bcell x"><div class="k">Enthalpy</div><div class="v num" id="bH"></div></div>
       <div class="bcell x"><div class="k">Water</div><div class="v num" id="bW"></div></div>
     </div>

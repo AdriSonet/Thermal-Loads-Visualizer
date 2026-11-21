@@ -49,6 +49,12 @@ export function helpers(ctx, env) {
       for (let k = -h; k < w; k += gap) { ctx.moveTo(x + k, y + h); ctx.lineTo(x + k + h, y); } ctx.stroke(); ctx.restore();
       D.rect(x, y, w, h, { stroke: color });
     },
+    area(pts, fill) { if (pts.length < 3) return; ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); },
+    hatchArea(pts, color = VAP, gap = 5) {       // a filled region in the latent look
+      if (pts.length < 3) return; const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      ctx.save(); ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fillStyle = 'rgba(111,138,166,.10)'; ctx.fill(); ctx.clip();
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); for (let k = x0 - (y1 - y0); k < x1; k += gap) { ctx.moveTo(k, y1); ctx.lineTo(k + (y1 - y0), y0); } ctx.stroke(); ctx.restore();
+    },
     vap(x, y, r = 2.6, a = 1) { ctx.globalAlpha = a; D.circle(x, y, r, { fill: PAPER, stroke: VAP, lw: 1.2 }); ctx.globalAlpha = 1; },
     drop(x, y, r, color = WATER) { ctx.beginPath(); ctx.moveTo(x, y - r * 1.7); ctx.bezierCurveTo(x + r * 1.3, y - r * 0.2, x + r, y + r, x, y + r); ctx.bezierCurveTo(x - r, y + r, x - r * 1.3, y - r * 0.2, x, y - r * 1.7); ctx.fillStyle = color; ctx.fill(); },
     // air as dots drifting along a duct, coloured by local temperature; vapour as hollow dots whose number follows w

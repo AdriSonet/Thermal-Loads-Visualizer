@@ -10,13 +10,14 @@ export const BASE = {
   summer: { out: { T: at('summer', 'site', 'Tout') ?? 37.9, w: at('summer', 'site', 'wOut') ?? 0.00906 }, room: { T: at('summer', 'zone', 'Tair') ?? 25, w: at('summer', 'zone', 'wIn') ?? 0.011 } },
   winter: { out: { T: 2, w: wFromRh(2, 0.8) }, room: { T: 21, w: 0.006 } },
   loadS: at('summer', 'zone', 'zSensCool') ?? 6400, loadL: at('summer', 'zone', 'zLatCool') ?? 1700, people: at('summer', 'zone', 'occ') ?? 48,
-  oa: at('summer', 'zone', 'oaFlow') ?? 0.384, Top: at('summer', 'zone', 'Top') ?? 27.4,
+  oa: at('summer', 'zone', 'oaFlow') ?? 0.384, Top: at('summer', 'zone', 'Top') ?? 27.4, mrt: at('summer', 'zone', 'MRT') ?? 29.9,
   pplSens: (at('summer', 'zone', 'pplSens') ?? 3107) / (at('summer', 'zone', 'occ') ?? 48), pplLat: (at('summer', 'zone', 'pplLat') ?? 2653) / (at('summer', 'zone', 'occ') ?? 48),
 };
 const MOA = BASE.oa / vol(BASE.summer.room.T, BASE.summer.room.w);       // kg/s of outdoor air for the lounge
 
 export const defaults = () => ({
-  probeT: 25, probeRH: 50, move: 'wet',
+  probeT: 25, probeRH: 50, surfT: 10, move: 'wet',
+  outT: Math.round(BASE.summer.out.T * 2) / 2, outRH: Math.round(rhFromW(BASE.summer.out.T, BASE.summer.out.w) * 100),
   waterCold: 7, waterHot: 45, flow: 1600, rows: 3, finPitch: 2.1, airflow: 2000,
   people: BASE.people, fcMode: 'std', waterWarm: 14,
   comfortT: Math.round(BASE.Top * 2) / 2, comfortRH: 50, met: 1.2,
@@ -24,36 +25,40 @@ export const defaults = () => ({
 });
 
 export const CONTROLS = {
-  probeT: { label: 'Dry-bulb temperature', min: -5, max: 42, step: 0.5, unit: '°C', d: 1 },
-  probeRH: { label: 'Relative humidity', min: 5, max: 100, step: 1, unit: '%', d: 0 },
+  probeT: { label: 'Dry-bulb temperature', min: -10, max: 50, step: 0.5, unit: '°C', d: 1 },
+  probeRH: { label: 'Relative humidity', min: 2, max: 100, step: 1, unit: '%', d: 0 },
+  surfT: { label: 'Temperature of the glass', min: -5, max: 40, step: 0.5, unit: '°C', d: 1 },
+  outT: { label: 'Outdoor temperature', min: 15, max: 46, step: 0.5, unit: '°C', d: 1 },
+  outRH: { label: 'Outdoor relative humidity', min: 5, max: 95, step: 1, unit: '%', d: 0 },
   move: { label: 'Process', seg: [['heat', 'Heat'], ['cool', 'Cool, dry'], ['wet', 'Cool and dry out'], ['evap', 'Evaporate water'], ['steam', 'Add steam'], ['mix', 'Mix two airs']], wrap: true },
-  waterCold: { label: 'Chilled water entering', min: 5, max: 18, step: 0.5, unit: '°C', d: 1 },
-  waterHot: { label: 'Hot water entering', min: 30, max: 70, step: 1, unit: '°C', d: 0 },
-  flow: { label: 'Water flow', min: 150, max: 3000, step: 50, unit: 'L/h', d: 0 },
+  waterCold: { label: 'Chilled water entering', min: 3, max: 20, step: 0.5, unit: '°C', d: 1 },
+  waterHot: { label: 'Hot water entering', min: 25, max: 85, step: 1, unit: '°C', d: 0 },
+  flow: { label: 'Water flow', min: 100, max: 4000, step: 50, unit: 'L/h', d: 0 },
   rows: { label: 'Rows of tubes', min: 1, max: 8, step: 1, unit: '', d: 0 },
   finPitch: { label: 'Fin spacing', min: 1.4, max: 4, step: 0.1, unit: 'mm', d: 1 },
-  airflow: { label: 'Air flow', min: 600, max: 4000, step: 50, unit: 'm³/h', d: 0 },
-  people: { label: 'People in the lounge', min: 0, max: 96, step: 4, unit: '', d: 0 },
+  airflow: { label: 'Air flow', min: 400, max: 5000, step: 50, unit: 'm³/h', d: 0 },
+  people: { label: 'People in the lounge', min: 0, max: 120, step: 4, unit: '', d: 0 },
   fcMode: { label: 'Fan coil', seg: [['std', 'Standard, cold water'], ['warm', 'Large, warmer water']] },
-  waterWarm: { label: 'Water entering the large coil', min: 11, max: 18, step: 0.5, unit: '°C', d: 1, show: S => S.fcMode === 'warm' },
-  comfortT: { label: 'Operative temperature', min: 20, max: 32, step: 0.5, unit: '°C', d: 1 },
-  comfortRH: { label: 'Relative humidity', min: 20, max: 90, step: 1, unit: '%', d: 0 },
+  waterWarm: { label: 'Water entering the large coil', min: 9, max: 20, step: 0.5, unit: '°C', d: 1, show: S => S.fcMode === 'warm' },
+  comfortT: { label: 'Operative temperature', min: 16, max: 36, step: 0.5, unit: '°C', d: 1 },
+  comfortRH: { label: 'Relative humidity', min: 10, max: 100, step: 1, unit: '%', d: 0 },
   met: { label: 'Activity', seg: [[1, 'Seated'], [1.2, 'Standing'], [1.9, 'Walking']] },
   season: { label: 'Season', seg: [['summer', 'Summer'], ['winter', 'Winter']] },
   humid: { label: 'Summer outdoor air', seg: [['dry', 'Zaragoza, design day'], ['humid', 'Humid coast']], show: S => S.season === 'summer' },
-  winterT: { label: 'Winter outdoor temperature', min: -12, max: 10, step: 0.5, unit: '°C', d: 1, show: S => S.season === 'winter' },
-  winterRoomRH: { label: 'Humidity of the room in winter', min: 20, max: 60, step: 1, unit: '%', d: 0, show: S => S.season === 'winter' },
+  winterT: { label: 'Winter outdoor temperature', min: -20, max: 15, step: 0.5, unit: '°C', d: 1, show: S => S.season === 'winter' },
+  winterRoomRH: { label: 'Humidity of the room in winter', min: 15, max: 70, step: 1, unit: '%', d: 0, show: S => S.season === 'winter' },
   recType: { label: 'Recovery', seg: [['none', 'None'], ['plate', 'Plate'], ['membrane', 'Membrane'], ['wheel', 'Wheel'], ['sorption', 'Sorption wheel']], wrap: true },
   plateType: { label: 'Plates', seg: [['plate', 'Metal'], ['membrane', 'Membrane']] },
   wheelType: { label: 'Wheel', seg: [['wheel', 'Bare aluminium'], ['sorption', 'Sorption coating']] },
   rpm: { label: 'Wheel speed', min: 0, max: 20, step: 1, unit: 'rpm', d: 0 },
-  supplyT: { label: 'Supply air temperature', min: 14, max: 24, step: 0.5, unit: '°C', d: 1 },
-  oaFrac: { label: 'Outdoor air in the supply', min: 30, max: 100, step: 5, unit: '%', d: 0 },
-  padEff: { label: 'How close the pad gets to saturation', min: 50, max: 95, step: 5, unit: '%', d: 0 },
+  supplyT: { label: 'Supply air temperature', min: 12, max: 26, step: 0.5, unit: '°C', d: 1 },
+  oaFrac: { label: 'Outdoor air in the supply', min: 20, max: 100, step: 5, unit: '%', d: 0 },
+  padEff: { label: 'How close the pad gets to saturation', min: 30, max: 98, step: 5, unit: '%', d: 0 },
   hour: { label: 'Hour of the design day', min: 0, max: 23, step: 1, unit: 'h', d: 0 },
 };
 
 // ---------------------------------------------------------------- shared pieces
+const probe = S => ({ T: S.probeT, w: wFromRh(S.probeT, S.probeRH / 100) });
 const kW = (q, d = 1) => fx(q / 1000, d);
 const gkg = w => fx(w * 1000, 1);
 const pct = x => `${Math.round(x * 100)}`;
@@ -65,6 +70,17 @@ const mAirOf = (S, st) => S.airflow / 3600 / vol(st.T, st.w);
 const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
 const SIMPLE = '<p>Calculated on this page with a simplified model, starting from the simulated lounge. It shows how the equipment behaves; it is not a product selection.</p>';
 
+// rows of the load strip: sensible + latent = total, W; positive is heat to take out of the air
+const HFG = 2.45e6;
+const coilLoads = (c, label = 'Coil, air side') => [{ label, s: c.qSens, l: c.qLat, strong: true }];
+function ahuLoads(a, out, room, m) {
+  const rows = [{ label: 'Outdoor air, untreated', s: m * (CP_AIR + out.w * CP_VAP) * (out.T - room.T), l: m * HFG * (out.w - room.w) }];
+  if (Math.abs(a.recovery.qTot) > 20) rows.push({ label: 'Recovered', s: -a.recovery.qSens, l: -a.recovery.qLat });
+  rows.push({ label: 'Fan of the unit', s: m * CP_AIR * 0.8, l: 0 });
+  if (a.cool) rows.push({ label: 'Cooling coil', s: a.cool.qSens, l: a.cool.qLat, strong: true });
+  if (a.heat) rows.push({ label: 'Heating coil', s: a.heat.qSens, l: a.heat.qLat, strong: true });
+  return rows;
+}
 function coldCoil(S, airIn = BASE.summer.room) {
   return coil({ air: airIn, mAir: mAirOf(S, airIn), water: { Tin: S.waterCold, flow: S.flow / 3600 }, geo: { rows: S.rows, finPitch: S.finPitch } });
 }
@@ -78,11 +94,13 @@ function coilView(S, c, airIn, { ids = ['1', '2'], guides = true, adp = false, t
   const m = mAirOf(S, airIn), kind = c.heating ? 'heat' : c.condensate > 0 ? 'wet' : 'cool';
   const g = [];
   if (guides && !c.heating) g.push({ type: 'dew', ...airIn }, { type: 'sat', T: c.tsMean, label: `surface ${fx(c.tsMean)} °C` });
+  if (!adp) g.push({ type: 'split', a: airIn, b: c.out });
   if (adp && c.condensate > 0) g.push({ type: 'line', a: airIn, b: { T: c.adp, w: wSat(c.adp) } }, { type: 'sat', T: c.adp, label: `apparatus dew point ${fx(c.adp)} °C`, color: '#1b1b1b' });
   return {
     scene: { name: 'coilFlow', c, airIn, water: { Tin: c.heating ? S.waterHot : S.waterCold, flow: S.flow / 3600 }, ids },
     chart: { points: [{ id: ids[0], ...airIn, pos: 'tr' }, { id: ids[1], ...c.out, pos: c.heating ? 'tr' : 'bl' }], paths: [{ pts: c.path, kind, flow: true }], guides: g },
     balance: { title: title ?? (c.heating ? 'Heating coil' : 'Cooling coil'), sub: sub ?? `what ${fx(m * 3600 * vol(airIn.T, airIn.w), 0)} m³/h of air gains or loses`, m, a: airIn, b: c.out, water: -c.condensate },
+    loads: coilLoads(c),
   };
 }
 const eff = (S, type) => { const r = RECOVERY[type]; if (type !== 'wheel' && type !== 'sorption') return r; const f = Math.min(1.03, (1 - Math.exp(-S.rpm / 3.5)) / (1 - Math.exp(-12 / 3.5))); return { ...r, effS: r.effS * f, effL: r.effL * f }; };
@@ -105,6 +123,7 @@ function ahuView(S, a, { type = S.recType, adia = false, title = 'Coils of the u
     scene: { name: 'ahu', a, pts: P, type, adiabatic: adia, mOA: MOA, season: S.season },
     chart: { points: pts, paths, guides: [] },
     balance: { title, sub: `outdoor air after the recovery, ${fx(MOA * 3600 * 0.86, 0)} m³/h`, m: MOA, a: P['1'], b: P['3'], water: -(a.cool?.condensate ?? 0) },
+    loads: ahuLoads(a, P.O, P.R, MOA),
   };
 }
 const saved = (a, S) => S.season === 'winter' ? [a.noRec.qHeat, a.qHeat] : [a.noRec.qCool, a.qCool];
@@ -143,23 +162,33 @@ function moveOf(S) {
 export const CHAPTERS = [
   { id: 'air', title: 'Moist air', intro: 'Before any equipment: what the air is carrying, and the chart that shows it.', steps: [
     { title: 'Air is dry air with a little water vapour in it', say: 'A kilogram of dry air carries a few grams of water as vapour. That number, in grams per kilogram, is the humidity ratio.',
-      body: '<p>Warm air can hold more vapour than cold air. Relative humidity says how full it is: the vapour it has, compared with the most it could hold at that temperature.</p><p>On the chart, temperature runs across and the humidity ratio runs up. The thick curve is full air, 100 %. Drag the point, or use the sliders.</p>',
+      body: '<p>Warm air can hold more vapour than cold air. Relative humidity says how full it is: the vapour it has, compared with the most it could hold at that temperature.</p><p>On the chart, temperature runs across and the humidity ratio runs up. The thick curve is full air, 100 %. Drag the point anywhere under it, or use the sliders; the chart grows when the air needs more room.</p>',
       controls: ['probeT', 'probeRH'],
-      compute(S) { const a = { T: S.probeT, w: Math.min(wFromRh(S.probeT, S.probeRH / 100), 0.0258) }; return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [], probe: true }, facts: [[gkg(a.w), 'g/kg', 'humidity ratio', 'vap'], [gkg(wSat(a.T)), 'g/kg', 'the most it could hold'], [pct(rh(a)), '%', 'relative humidity']] }; } },
-    { title: 'Two temperatures hide in the humidity', say: 'Cool the air without touching its water and at some temperature it is full. That is the dew point: anything colder than it gets wet.',
-      body: '<p>On the chart, go left from the point until the saturation curve. The dew point depends only on how much vapour there is.</p><p>The wet-bulb temperature is the other one: how cold the air can get by evaporating water into itself. Follow the slanted line up to the curve. The drier the air, the further below the dry-bulb it lies.</p>',
+      compute(S) { const a = probe(S); return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [], probe: true }, facts: [[gkg(a.w), 'g/kg', 'humidity ratio', 'vap'], [gkg(wSat(a.T)), 'g/kg', 'the most it could hold'], [pct(rh(a)), '%', 'relative humidity']] }; } },
+    { title: 'The dew point: cool the air until it is full', say: 'Cooling does not remove water. It shrinks the room the water has. At some temperature the same grams fill the air completely: that temperature is the dew point.',
+      body: '<p>Anything colder than the dew point gets wet, because the air touching it cannot keep all its vapour. The part that no longer fits turns into liquid on the surface. That is the glass of cold water in summer, a window in winter, and the fins of a cooling coil.</p><p>On the chart: go left from the point until the curve, then follow the curve down to the temperature of the surface. The drop in height is the water that condenses.</p>',
+      controls: ['surfT', 'probeT', 'probeRH'],
+      compute(S) { const a = probe(S), d = tdp(a.w), Tc = S.surfT, wet = Tc < d, e = { T: Tc, w: Math.min(a.w, wSat(Tc)) }, paths = [], g = [];
+        if (Tc < a.T) { paths.push({ pts: [a, { T: Math.max(d, Tc), w: a.w }], kind: 'cool', flow: true }); }
+        if (wet) { const curve = []; for (let T = d; T > Tc; T -= 0.5) curve.push({ T, w: wSat(T) }); curve.push(e); paths.push({ pts: curve, kind: 'wet', flow: true }); g.push({ type: 'area', pts: [{ T: Tc, w: a.w }, ...curve], color: '#3d86d6', opacity: 0.25 }); }
+        g.push({ type: 'line', a: { T: Tc, w: 0 }, b: { T: Tc, w: Math.max(a.w, wSat(Math.min(Tc, 50))) }, color: '#2f6fc0' });
+        return { scene: { name: 'dew', air: a, surfT: Tc }, cap: 'The same air, cooled', chart: { points: [{ id: 'air', ...a, big: true, pos: 'tr' }, { id: `dew point ${fx(d)} °C`, T: d, w: a.w, hollow: true, pos: 'tl' }, { id: 'at the glass', ...e, color: '#2f6fc0', pos: wet ? 'bl' : 'br' }], paths, guides: g, probe: true },
+          facts: [[fx(d), '°C', 'dew point of this air', 'cold'], [fx(Tc), '°C', 'the glass'], [fx((a.w - e.w) * 1000), 'g/kg', wet ? 'condenses on it' : 'condenses: it stays dry', 'vap']] }; } },
+    { title: 'The wet bulb: cool the air with its own water', say: 'The other temperature hidden in the humidity. Evaporate water into the air and it cools, until it is full. The temperature it reaches is the wet bulb.',
+      body: '<p>On the chart, follow the slanted line from the point up to the curve. The drier the air, the further the wet bulb lies below the dry bulb, and the more a wet surface or a wet pad can cool it. Air that is already full has all three temperatures equal.</p>',
       controls: ['probeT', 'probeRH'],
-      compute(S) { const a = { T: S.probeT, w: Math.min(wFromRh(S.probeT, S.probeRH / 100), 0.0258) }; return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [{ type: 'dew', ...a }, { type: 'wb', ...a }], probe: true }, facts: [[fx(a.T), '°C', 'dry bulb'], [fx(twb(a.T, a.w)), '°C', 'wet bulb', 'vap'], [fx(tdp(a.w)), '°C', 'dew point', 'cold']] }; } },
-    { title: 'Enthalpy adds the two kinds of heat', say: 'Sensible heat is the part you read on a thermometer. Latent heat is the part that went into evaporating the water. Enthalpy is their sum.',
-      body: '<p>It is counted per kilogram of dry air, from zero for dry air at 0 °C. The dotted slanted lines on the chart join the states with the same enthalpy.</p><p>Everything a coil or a recovery unit does to the air is a change of enthalpy: flow of air times the difference is the power. Moving sideways on the chart is sensible; moving up or down is latent.</p>',
+      compute(S) { const a = probe(S); return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [{ type: 'dew', ...a }, { type: 'wb', ...a }], probe: true }, facts: [[fx(a.T), '°C', 'dry bulb'], [fx(twb(a.T, a.w)), '°C', 'wet bulb', 'vap'], [fx(tdp(a.w)), '°C', 'dew point', 'cold']] }; } },
+    { title: 'Enthalpy adds the two kinds of heat', say: 'Sensible heat is the part you read on a thermometer. Latent heat is the part that went into evaporating the water. Enthalpy is their sum, and it is the number that loads and coils are counted in.',
+      body: '<p>It is counted per kilogram of dry air, from zero for dry air at 0 °C. The dotted slanted lines on the chart join the states with the same enthalpy.</p><p>Everything a coil or a recovery unit does to the air is a change of enthalpy: flow of air times the difference is the power. Moving sideways on the chart is sensible; moving up or down is latent; the total is both.</p>',
       controls: ['probeT', 'probeRH'],
-      compute(S) { const a = { T: S.probeT, w: Math.min(wFromRh(S.probeT, S.probeRH / 100), 0.0258) }, hh = h(a.T, a.w), B = twb(a.T, a.w); return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [{ type: 'line', a, b: { T: B, w: wSat(B) }, color: '#1b1b1b' }], probe: true }, facts: [[fx(hh / 1000), 'kJ/kg', 'enthalpy'], [fx(CP_AIR * a.T / 1000), 'kJ/kg', 'sensible part', 'hot'], [fx((hh - CP_AIR * a.T) / 1000), 'kJ/kg', 'latent part', 'vap']] }; } },
+      compute(S) { const a = probe(S), hh = h(a.T, a.w), B = twb(a.T, a.w); return { scene: { name: 'air', air: a }, cap: 'One kilogram of dry air', chart: { points: [{ ...a, big: true }], paths: [], guides: [{ type: 'split', a: { T: 0, w: 0 }, b: a }, { type: 'line', a, b: { T: B, w: wSat(B) }, color: '#1b1b1b' }], probe: true }, facts: [[fx(hh / 1000), 'kJ/kg', 'enthalpy, the total'], [fx(CP_AIR * a.T / 1000), 'kJ/kg', 'sensible part', 'hot'], [fx((hh - CP_AIR * a.T) / 1000), 'kJ/kg', 'latent part', 'vap']] }; } },
   ] },
   { id: 'moves', title: 'Six moves on the chart', intro: 'Every piece of equipment moves the air in one of a few directions.', steps: [
     { title: 'Each process is a direction', say: 'Pick a process and watch which way the point goes.', body: '<p id="moveSay"></p><p>The balance under the drawing splits the change into sensible, latent and total, for one kilogram of air per second.</p>', controls: ['move'],
       compute(S) { const m = moveOf(S), pts = m.pts ?? [m.a, m.b], P = [{ id: 'A', ...m.a, pos: 'tr' }, { id: m.c ? 'M' : 'B', ...m.b, pos: m.kind === 'wet' ? 'bl' : 'tl' }], paths = [{ pts, kind: m.kind, flow: true }], g = [];
         if (m.c) { P.splice(1, 0, { id: 'B', ...m.c, pos: 'bl' }); paths.length = 0; paths.push({ pts: [m.a, m.b], kind: 'mix', flow: true }, { pts: [m.c, m.b], kind: 'mix' }); }
         if (m.wb) g.push({ type: 'wb', ...m.a }); if (m.kind === 'wet' || m.kind === 'cool') g.push({ type: 'dew', ...m.a });
+        if (!m.c) g.push({ type: 'split', a: m.a, b: m.b });
         return { scene: { name: 'duct', a: m.a, b: m.b, c: m.c, device: m.device, title: m.title, ids: m.c ? ['A', 'M', 'B'] : ['A', 'B'] }, cap: 'One process in a duct', chart: { points: P, paths, guides: g }, text: { moveSay: m.say },
           balance: m.c ? null : { title: CONTROLS.move.seg.find(q => q[0] === S.move)[1], sub: 'per kg/s of air', m: 1, a: m.a, b: m.b, water: m.b.w - m.a.w },
           facts: [[fx(m.b.T - m.a.T), 'K', 'temperature'], [fx((m.b.w - m.a.w) * 1000), 'g/kg', 'water in the air', 'vap'], [fx((h(m.b.T, m.b.w) - h(m.a.T, m.a.w)) / 1000), 'kJ/kg', 'enthalpy']] }; } },
@@ -185,10 +214,10 @@ export const CHAPTERS = [
         return { ...coilView(S, c, a), cap: 'Hot water coil, two rows', facts: [[fx(c.out.T), '°C', 'air leaving', 'hot'], [`${pct(rh(a))} → ${pct(rh(c.out))}`, '%', 'relative humidity'], [kW(-c.qTot), 'kW', 'into the air, all sensible', 'hot']], more: coilMore(c, mAirOf(S, a)) }; } },
   ] },
   { id: 'dry', title: 'Cold coil, dry', intro: 'Chilled water, but not cold enough to make the surface wet.', steps: [
-    { title: 'Above the dew point, a cold coil only cools', say: 'With water at 16 °C the whole surface stays warmer than the dew point of the room air. The air is cooled and keeps all its water.',
+    { title: 'Above the dew point, a cold coil only cools', say: 'Start with water at 16 °C: the whole surface stays warmer than the dew point of the room air. The air is cooled and keeps all its water.',
       body: '<p>The process is again horizontal, now to the left. The relative humidity rises: the same vapour in colder air.</p><p>Look at the profile under the coil: the surface line never drops below the dashed dew-point line. Lower the water temperature and watch for the moment it does.</p>',
       enter: { waterCold: 16 }, controls: ['waterCold', 'flow'],
-      compute(S) { const a = BASE.summer.room, c = coldCoil(S); return { ...coilView(S, c, a), cap: 'Chilled water coil', facts: [[fx(Math.min(...c.path.slice(1).map(q => q.Ts))), '°C', 'coldest surface', 'cold'], [fx(tdp(a.w)), '°C', 'dew point of the air'], [fx(c.condensate * 3600, 2), 'kg/h', 'water condensed', 'vap']], more: coilMore(c, mAirOf(S, a)) }; } },
+      compute(S) { const a = BASE.summer.room, c = coldCoil(S); return { ...coilView(S, c, a), cap: 'Chilled water coil', facts: [[fx(Math.min(...c.path.slice(1).map(q => q.Ts))), '°C', 'coldest surface', 'cold'], [fx(tdp(a.w)), '°C', 'dew point of the air'], [kW(c.qTot), 'kW', c.condensate > 0 ? 'total, part of it latent' : 'total, all sensible', 'cold']], warn: c.condensate > 0 ? `With water at ${fx(S.waterCold)} °C the coil is no longer dry: ${fx(c.condensate * 3600, 2)} kg/h condense.` : '', more: coilMore(c, mAirOf(S, a)) }; } },
   ] },
   { id: 'wet', title: 'Cold coil, wet', intro: 'Colder water, and the coil starts doing two jobs at once.', steps: [
     { title: 'Below the dew point the surface gets wet', say: 'With water at 7 °C the fins are colder than the dew point. The vapour that touches them condenses, runs down the fins and drips into the tray.',
@@ -196,14 +225,14 @@ export const CHAPTERS = [
       enter: { waterCold: 7 }, controls: ['waterCold', 'rows'],
       compute(S) { const a = BASE.summer.room, c = coldCoil(S); return { ...coilView(S, c, a), cap: 'Chilled water coil', facts: [[fx(c.tsMean), '°C', 'mean surface', 'cold'], [fx(tdp(a.w)), '°C', 'dew point of the air'], [pct(c.wetFrac), '%', 'of the coil is wet', 'vap']], more: coilMore(c, mAirOf(S, a)) }; } },
     { title: 'How many grams of water', say: 'Every kilogram of air leaves a few grams of water on the coil. Times the air flow, that is litres per hour going down the drain.',
-      body: '<p>Each gram that condenses gives its heat of evaporation back, about 2.5 kJ, and the chilled water has to carry it away. That is the latent load of the coil: it cools nothing, it only dries.</p>',
+      body: '<p>Each gram that condenses gives its heat of evaporation back, about 2.5 kJ, and the chilled water has to carry it away. That is the latent part of the load: it cools nothing, it only dries. The coil pays for both parts; the total is what the chilled water takes.</p>',
       controls: ['waterCold', 'airflow'],
-      compute(S) { const a = BASE.summer.room, c = coldCoil(S), kgh = c.condensate * 3600; return { ...coilView(S, c, a), cap: 'Chilled water coil', facts: [[fx((a.w - c.out.w) * 1000, 2), 'g/kg', 'water left on the coil', 'vap'], [fx(kgh, 2), 'kg/h', 'to the drain', 'vap'], [kW(c.qLat, 2), 'kW', 'latent heat to remove', 'vap']],
+      compute(S) { const a = BASE.summer.room, c = coldCoil(S), kgh = c.condensate * 3600; return { ...coilView(S, c, a), cap: 'Chilled water coil', facts: [[fx((a.w - c.out.w) * 1000, 2), 'g/kg', 'water left on the coil', 'vap'], [fx(kgh, 2), 'kg/h', 'to the drain', 'vap'], [kW(c.qTot), 'kW', `total load: ${kW(c.qSens)} sensible + ${kW(c.qLat)} latent`, 'cold']],
         warn: kgh > 0.01 ? '' : 'No condensate with this water temperature: the surface is above the dew point.', more: coilMore(c, mAirOf(S, a)) + `<p>A 250 mL glass fills every ${kgh > 0.01 ? fx(15 / kgh, 0) : '∞'} minutes.</p>` }; } },
     { title: 'Sensible, latent and total', say: 'The total is the enthalpy the air loses. The sensible part is the temperature drop; the latent part is the water.',
       body: '<p>Their ratio, sensible over total, is the sensible heat factor of the coil. A room has its own factor, set by its loads. If the coil dries more or less than the room needs, the room humidity drifts until they agree.</p><p>The straight line from inlet to outlet, extended, meets the saturation curve at the apparatus dew point: the temperature of an ideal surface doing the same job. The share of air that behaves as if it had not touched it is the bypass factor.</p>',
       controls: ['waterCold', 'flow', 'rows'],
-      compute(S) { const a = BASE.summer.room, c = coldCoil(S); return { ...coilView(S, c, a, { adp: true, guides: false }), cap: 'Chilled water coil', facts: [[fx(c.qSens / c.qTot, 2), '', 'sensible heat factor'], [fx((h(a.T, a.w) - h(c.out.T, c.out.w)) / 1000), 'kJ/kg', 'enthalpy taken out'], [fx(c.bypass, 2), '', 'bypass factor']], more: coilMore(c, mAirOf(S, a)) }; } },
+      compute(S) { const a = BASE.summer.room, c = coldCoil(S); return { ...coilView(S, c, a, { adp: true, guides: false }), cap: 'Chilled water coil', facts: [[kW(c.qTot), 'kW', 'total', 'cold'], [fx(c.qSens / c.qTot, 2), '', 'sensible share of it'], [fx(c.bypass, 2), '', 'bypass factor']], more: coilMore(c, mAirOf(S, a)) }; } },
   ] },
   { id: 'fancoil', title: 'The fan coil in the room', intro: 'The same coil, now in a loop with the lounge and its people.', steps: [
     { title: 'The room settles where the coil and the loads agree', say: 'The fan coil takes room air, cools and dries it, and blows it back. A valve throttles the water to hold the temperature. Nothing controls the humidity: it ends up wherever the water removed equals the water the people give off.',
@@ -301,6 +330,25 @@ export const CHAPTERS = [
       compute(S) { const SS = { ...S, season: 'summer' }, a = ahuOf(SS, { type: 'plate', adia: true }), b = ahuOf(SS, { type: 'plate' }), v = ahuView(SS, a, { type: 'plate', adia: true });
         return { ...v, cap: 'Primary-air unit with a humidified extract', facts: [[kW(b.qCool), 'kW', 'coil with plates only'], [kW(a.qCool), 'kW', 'with the extract humidified', 'cold'], [fx(a.humidifier.added * MOA * 3600, 1), 'kg/h', 'water evaporated', 'vap']], more: ahuMore(a) }; } },
   ] },
+  { id: 'space', title: 'Outdoors, the system and the room', intro: 'Everything together: what is outside, what the equipment does, and the conditions people end up in.', steps: [
+    { title: 'From the weather to the room, and the total the plant pays', say: 'Choose the weather. The unit brings that air in, recovers what it can and treats it. The fan coils take the load of the room. The room settles at a temperature and a humidity, and one chilled-water plant pays for all of it.',
+      body: '<p>The strip below adds it up. The room has its own load, sensible and latent. The outdoor air brings another one. The recovery takes part of it away for free. What is left is shared between the coil of the unit and the fan coils, and their sum is the plant.</p><p>Make the outdoor air humid and watch the latent parts grow and the room humidity follow. Warm the chilled water and the plant has less to do, but the room gets wetter.</p>',
+      enter: { season: 'summer' }, controls: ['outT', 'outRH', 'people', 'waterCold', 'recType', 'supplyT'],
+      compute(S) { const x = spaceOf(S), a = x.a, f = x.f, c = f.coil, room = f.eq, P = Object.fromEntries(a.points.map(q => [q.id, q])), m = MOA;
+        const pm = pmv({ ta: room.T, tr: room.T + (BASE.mrt - BASE.summer.room.T), rh: Math.min(1, room.rh), met: 1.2, clo: 0.5 });
+        const qS = (a.cool?.qSens ?? 0) + c.qSens, qL = (a.cool?.qLat ?? 0) + c.qLat, kgh = ((a.cool?.condensate ?? 0) + c.condensate) * 3600;
+        const paths = [{ pts: [P.O, P['1']], kind: 'rec', flow: true }];
+        if (a.cool) paths.push({ pts: a.cool.path, kind: a.cool.condensate > 0 ? 'wet' : 'cool', flow: true }); if (a.heat) paths.push({ pts: [P['2'], P['3']], kind: 'heat', flow: true });
+        paths.push({ pts: [P['3'], P.S], kind: 'room', noArrow: true, flow: true }, { pts: [P.S, room], kind: 'room', dash: true, flow: true }, { pts: c.path.map(q => ({ T: q.T, w: q.w })), kind: c.condensate > 0 ? 'wet' : 'cool' }, { pts: [c.out, room], kind: 'faint', dash: true });
+        const rows = [{ label: 'Room: people, sun, lights', s: f.roomS, l: x.loadL }, ...ahuLoads(a, x.out, room, m).map(r => r.label === 'Cooling coil' ? { ...r, label: 'Coil of the unit' } : r), { label: 'Fan coils', s: c.qSens, l: c.qLat, strong: true }, { label: 'Chilled water plant', s: qS, l: qL, strong: true, total: true }];
+        return { scene: { name: 'space', pts: P, fc: f, a, people: S.people, pm, type: S.recType, waterIn: S.waterCold }, cap: 'The lounge, its fan coils and its air handling unit',
+          chart: { points: [{ id: 'O', ...x.out, pos: 'tr' }, { id: '1', ...P['1'], pos: 'br' }, { id: 'S', ...P.S, pos: 'bl', color: '#8a5a9e' }, { id: 'Room', ...room, pos: 'tl', big: true }, { id: 'fan coil', ...c.out, pos: 'bl', hollow: true }], paths, guides: [{ type: 'band', t0: 20, t1: 27, w0: 0.004, w1: 0.012 }] },
+          balance: { title: 'Chilled water plant', sub: 'coil of the unit + fan coils', q: { s: -qS, l: -qL }, kgh },
+          loads: rows,
+          facts: [[`${fx(room.T)} °C`, '', `room, ${pct(room.rh)} % humidity`], [(pm.pmv > 0 ? '+' : '') + fx(pm.pmv, 1), '', `comfort vote, ${fx(pm.ppd, 0)} % dissatisfied`], [kW(qS + qL), 'kW', 'chilled water plant', 'cold']],
+          warn: !f.met ? `The fan coils are at full flow and cannot hold 25 °C: the room drifts to ${fx(room.T)} °C.` : f.humid ? 'Nothing removes the moisture: the room goes to saturation.' : '',
+          more: SIMPLE + `<p>Room loads are those of the simulated lounge at its summer peak, scaled with the number of people. The outdoor air flow is the simulated one, ${fx(m, 3)} kg/s. The room humidity is where the water condensed on the fan coils equals the vapour from the people plus what the supply air brings or takes. Comfort uses the radiant temperature of the simulation, ${fx(BASE.mrt - BASE.summer.room.T)} K above the air.</p>` }; } },
+  ] },
   { id: 'day', title: 'The whole system through the day', intro: 'One design day of the lounge, hour by hour.', steps: [
     { title: 'What the unit spends, and what the recovery gives back', say: 'Move through the day. The outdoor air warms up towards the afternoon; the grey line is what the cooling coil would need with no recovery, the black line what it needs with the one you choose.',
       body: '<p>The outdoor conditions, the room and the outdoor air flow of each hour are those of the simulation. The blue dashed line adds a wet pad in the extract air. The gap between the curves is energy the chiller does not have to make.</p>',
@@ -314,6 +362,19 @@ export const CHAPTERS = [
 ];
 
 // ---------------------------------------------------------------- helpers that need the chapters' state
+const spaceCache = new Map();
+function spaceOf(S) {
+  const key = [S.outT, S.outRH, S.people, S.waterCold, S.recType, S.supplyT, S.rpm].join('|'); if (spaceCache.has(key)) return spaceCache.get(key);
+  const out = { T: S.outT, w: wFromRh(S.outT, S.outRH / 100) }, SS = { ...S, season: 'summer' };
+  const loadS = Math.max(500, BASE.loadS + (S.people - BASE.people) * BASE.pplSens), loadL = Math.max(0, BASE.pplLat * S.people);
+  let room = { ...BASE.summer.room }, a, f;
+  for (let k = 0; k < 3; k++) {                                       // the unit sees the room, the room sees the unit: settle both
+    a = ahuOf(SS, { out, room });
+    f = fanCoilRoom({ loadS, loadL, setpoint: BASE.summer.room.T, w0: BASE.summer.room.w, mAir: 0.65, geo: { rows: 3 }, water: { Tin: S.waterCold, flowMax: 0.45 }, vent: { m: MOA, T: a.supply.T, w: a.supply.w } });
+    room = { T: f.eq.T, w: f.eq.w };
+  }
+  const v = { out, a, f, loadS, loadL }; if (spaceCache.size > 300) spaceCache.clear(); spaceCache.set(key, v); return v;
+}
 const fcCache = new Map();
 function fcOf(S, mode) {
   const warm = mode === 'warm', loadS = Math.max(500, BASE.loadS + (S.people - BASE.people) * BASE.pplSens), loadL = Math.max(0, BASE.loadL + (S.people - BASE.people) * BASE.pplLat);
@@ -328,7 +389,8 @@ function fcView(S, mode) {
   return { scene: { name: 'room', fc: f, water: { Tin: f.waterIn }, people: S.people }, cap: 'The lounge and its fan coils, in section',
     chart: { points: [{ id: 'Room', ...room, pos: 'tr' }, { id: 'Supply', ...c.out, pos: 'bl' }], paths: [{ pts: c.path.map(q => ({ T: q.T, w: q.w })), kind: c.condensate > 0 ? 'wet' : 'cool', flow: true }, { pts: [c.out, room], kind: 'room', dash: true, flow: true }], guides: [{ type: 'dew', ...room }, { type: 'sat', T: c.tsMean, label: `surface ${fx(c.tsMean)} °C` }] },
     balance: { title: 'Fan coil', sub: `room load ${kW(f.loadS)} kW sensible, ${kW(f.loadL)} kW latent`, m: mode === 'warm' ? 0.9 : 0.65, a: room, b: c.out, water: -c.condensate },
-    facts: [[pct(room.rh), '%', `room humidity, ${gkg(room.w)} g/kg`, 'vap'], [fx(c.condensate * 3600, 2), 'kg/h', 'condensed', 'vap'], [pct(f.valve), '%', 'valve open']],
+    facts: [[pct(room.rh), '%', `room humidity, ${gkg(room.w)} g/kg`, 'vap'], [kW(c.qTot), 'kW', 'total the fan coils remove', 'cold'], [fx(c.condensate * 3600, 2), 'kg/h', 'condensed', 'vap']],
+    loads: [{ label: 'Room load', s: f.loadS, l: f.loadL }, { label: 'Fan coils remove', s: c.qSens, l: c.qLat, strong: true }],
     warn: !f.met ? `Coil at full flow, load not met: the room drifts to ${fx(room.T)} °C.` : f.humid ? 'The coil stays dry: nothing removes the moisture and the room goes to saturation.' : '',
     more: SIMPLE + `<table>${row('Air through the fan coils', fx((mode === 'warm' ? 0.9 : 0.65) * 3600 * 0.87, 0) + ' m³/h')}${row('Rows of tubes', mode === 'warm' ? 8 : 3)}${row('Sensible removed − sensible load', fx(c.qSens - f.loadS, 0) + ' W')}${row('Condensate − vapour released', fx((c.condensate - f.gain) * 3600, 3) + ' kg/h')}${row('Mean surface temperature', fx(c.tsMean) + ' °C')}</table><p>The outdoor air is assumed to arrive at room conditions from the air handling unit, so the fan coils only see the loads of the room.</p>` };
 }

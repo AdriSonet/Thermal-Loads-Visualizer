@@ -1,7 +1,7 @@
 // Scenes of the second half: the air handling unit, the plate exchanger, the rotary wheel and the day.
 import { tdp } from './psychro.js';
 import { VW, INK, INK2, MUTED, SOFT, LINE, LINE2, PAPER, HOT, COLD, VAP, WATER, clamp, lerp, rnd, fx, tcol } from './draw.js';
-import { mixAt } from './scenes.js';
+import { mixAt, figure } from './scenes.js';
 
 const kw = q => `${fx(Math.abs(q) / 1000)} kW`;
 const moved = r => `${kw(r.qSens)} of heat ${r.qSens > 0 ? 'out of' : 'into'} the supply air` + (Math.abs(r.qLat) > 30 ? `, ${kw(r.qLat)} latent ${r.qLat > 0 ? 'out' : 'in'}` : '');
@@ -151,7 +151,14 @@ export function day(D, s, t) {
     D.rect(x0, y0, x1 - x0, y1 - y0, { fill: '#fff', stroke: LINE });
     D.text(title, x0, y0 - 8, { size: 11.5, color: MUTED });
     D.text(`${hi}`, x0 - 6, y0 + 9, { size: 10.5, color: SOFT, align: 'right' }); D.text(`${lo}`, x0 - 6, y1, { size: 10.5, color: SOFT, align: 'right' });
-    if (series.band) { const [a, b] = series.band, c = D.ctx; c.beginPath(); H.forEach((q, i) => i ? c.lineTo(X(q.h), Y(a(q))) : c.moveTo(X(q.h), Y(a(q)))); [...H].reverse().forEach(q => c.lineTo(X(q.h), Y(b(q)))); c.closePath(); c.fillStyle = 'rgba(27,27,27,.07)'; c.fill(); }
+    if (series.band) {                                                 // energy is the area under a power curve: fill it and say how much
+      const [a, b] = series.band, kwh = g => H.reduce((n, q) => n + g(q), 0);
+      D.hatchArea([...H.map(q => [X(q.h), Y(a(q))]), ...[...H].reverse().map(q => [X(q.h), Y(b(q))])], '#a29d95', 5);
+      D.area([[X(H[0].h), Y(0)], ...H.map(q => [X(q.h), Y(b(q))]), [X(H.at(-1).h), Y(0)]], 'rgba(47,111,192,.30)');
+      const mid = H.reduce((m, q) => a(q) > a(m) ? q : m, H[0]), left = mid.h > 12 ? -1 : 1;
+      D.text(`coil ${fx(kwh(b), 0)} kWh`, X(mid.h) + left * 150, Y(b(mid) * 0.35), { size: 12, weight: 600, color: '#1f4f8f', align: 'center', halo: true });
+      D.text(`recovered ${fx(kwh(a) - kwh(b), 0)} kWh`, X(mid.h) + left * 150, Y((a(mid) + b(mid)) / 2) + 14, { size: 12, weight: 600, color: INK2, align: 'center', halo: true });
+    }
     for (const q of series) D.poly(H.map(p => [X(p.h), Y(q.get(p))]), q.color, q.w ?? 1.8, q.dash);
     const cur = H[s.i]; let last = -99;
     D.line(X(cur.h), y0, X(cur.h), y1, INK, 1, [3, 3]);
@@ -166,4 +173,54 @@ export function day(D, s, t) {
   panel(226, 356, 'Cooling coil of the air handling unit, kW', bot, 'kW');
   for (let h = 0; h <= 24; h += 3) D.text(`${h}`, X(h), 372, { size: 10.5, color: SOFT, align: 'center' });
   D.text('hour', x1 + 6, 372, { size: 10.5, color: SOFT });
+}
+
+// ------------------------------------------------------------------ 12 · outdoors, the system and the room, together
+export function space(D, s, t) {
+  const { ctx } = D, P = s.pts, f = s.fc, c = f.coil, a = s.a, room = f.eq;
+  const dx0 = 40, ux0 = 196, ux1 = 366, uy0 = 66, um = 108, uy1 = 150, rx0 = 404, rx1 = 806, ry0 = 178, ry1 = 350, sx0 = 430, sx1 = 470, ex0 = 500, ex1 = 540;
+  // ducts and the unit
+  D.rect(dx0, uy0, ex1 - dx0, um - uy0, { fill: '#fff' }); D.rect(dx0, um, sx1 - dx0, uy1 - um, { fill: '#fff' });
+  D.rect(sx0, uy1, sx1 - sx0, ry0 - uy1, { fill: '#fff' }); D.rect(ex0, um, ex1 - ex0, ry0 - um, { fill: '#fff' });
+  D.rect(rx0, ry0, rx1 - rx0, ry1 - ry0, { fill: '#fff' });
+  const seg = (x, x0, x1, A, B) => mixAt(A, B, clamp((x - x0) / (x1 - x0), 0, 1));
+  const afterCoil = P['3'] ?? P['2'] ?? P['1'];
+  D.flow(t, { x0: dx0, x1: sx1, y0: um, y1: uy1, n: 26, nv: 30, seed: 31, at: (u, x) => x < 232 ? P.O : x < 276 ? seg(x, 232, 276, P.O, P['1']) : x < 306 ? P['1'] : x < 336 ? seg(x, 306, 336, P['1'], afterCoil) : P.S });
+  D.flow(t, { x0: dx0, x1: ex1, y0: uy0, y1: um, n: 26, nv: 30, seed: 32, dir: -1, at: (u, x) => x > 276 ? room : x > 232 ? seg(x, 276, 232, room, P.X) : P.X });
+  for (let i = 0; i < 9; i++) { const ph = (t * 0.35 + rnd(i + 70)) % 1; D.circle(sx0 + 6 + rnd(i + 71) * 28, uy1 + ph * (ry0 - uy1 + 18), 2.7, { fill: tcol(P.S.T) }); D.circle(ex0 + 6 + rnd(i + 75) * 28, ry0 + 14 - ph * (ry0 - um + 8), 2.7, { fill: tcol(room.T) }); }
+  D.line(dx0, uy0, ex1, uy0, INK, 1.3); D.line(dx0, uy1, sx0, uy1, INK, 1.3); D.line(dx0, um, ux0, um, INK, 1.3); D.line(ux1, um, ex0, um, INK, 1.3);
+  D.line(ex1, uy0, ex1, ry0, INK, 1.3); D.line(ex0, um, ex0, ry0, INK, 1.3); D.line(sx1, um, sx1, ry0, INK, 1.3); D.line(sx0, uy1, sx0, ry0, INK, 1.3);
+  D.rect(ux0, uy0, ux1 - ux0, uy1 - uy0, { stroke: INK, lw: 1.6 });
+  if (s.type !== 'none') { ctx.beginPath(); ctx.moveTo(254, uy0 + 5); ctx.lineTo(290, um); ctx.lineTo(254, uy1 - 5); ctx.lineTo(218, um); ctx.closePath(); ctx.fillStyle = 'rgba(253,252,250,.85)'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.stroke(); }
+  D.tubes(322, um + 3, uy1 - 3, 3, a.cool ? COLD : a.heat ? HOT : '#d9d5cd', 4.4);
+  D.text('air handling unit', (ux0 + ux1) / 2, uy0 - 8, { size: 11.5, color: MUTED, align: 'center' });
+  // outdoors
+  D.text('Outdoors', dx0, 186, { size: 11.5, color: MUTED });
+  D.tag(dx0, 206, P.O, { id: 'O' });
+  D.arrow(dx0 + 4, um + 21, dx0 + 40, um + 21, MUTED, 1.3); D.arrow(dx0 + 40, uy0 + 21, dx0 + 4, uy0 + 21, MUTED, 1.3);
+  D.tag(ex1 + 12, 128, P.S, { id: 'S' }); D.text('supply air', ex1 + 12, 110, { size: 11, color: MUTED });
+  // the room: its air, the people, the fan coils
+  D.rect(rx0, ry0, rx1 - rx0, ry1 - ry0, { stroke: INK, lw: 1.6 });
+  D.line(sx0 + 1, ry0, sx1 - 1, ry0, '#fff', 3); D.line(ex0 + 1, ry0, ex1 - 1, ry0, '#fff', 3);
+  for (let i = 0; i < 44; i++) { const x = rx0 + 10 + rnd(i + 100) * (rx1 - rx0 - 20) + Math.sin(t * 0.7 + i) * 6, y = ry0 + 10 + rnd(i + 140) * (ry1 - ry0 - 20) + Math.cos(t * 0.6 + i) * 6; if (i % 3 === 0) { if (room.w / 0.02 > rnd(i + 180)) D.vap(x, y, 2.5); } else D.circle(x, y, 2.5, { fill: tcol(room.T, 0.75) }); }
+  const fx0 = 664, fx1 = 790, fy0 = ry0 + 8, fy1 = ry0 + 46;
+  D.rect(fx0, fy0, fx1 - fx0, fy1 - fy0, { fill: PAPER, stroke: INK, lw: 1.3, r: 3 });
+  D.tubes(fx0 + 86, fy0 + 3, fy1 - 3, 2, tcol(s.waterIn), 4.6); D.tubes(fx0 + 102, fy0 + 3, fy1 - 3, 2, tcol(c.waterOut), 4.6, true);
+  D.circle(fx0 + 30, (fy0 + fy1) / 2, 12, { stroke: INK, lw: 1.2 }); for (let k = 0; k < 3; k++) { const an = (D.env.still ? 0 : t * 3) + k * 2.094; D.line(fx0 + 30, (fy0 + fy1) / 2, fx0 + 30 + Math.cos(an) * 10, (fy0 + fy1) / 2 + Math.sin(an) * 10, INK, 2); }
+  D.text('fan coils', fx0, fy1 + 13, { size: 11, color: MUTED });
+  const kgh = c.condensate * 3600; if (kgh > 0.005) { const ph = (t * clamp(0.2 + kgh * 0.1, 0.2, 1)) % 1; D.drop(fx0 + 94, fy1 + 6 + ph * 20, 2.4); D.text(`${fx(kgh, 1)} kg/h`, fx0 + 104, fy1 + 28, { size: 11.5, weight: 600, color: COLD }); }
+  const np = clamp(Math.round(s.people / 8), 1, 7);
+  for (let i = 0; i < np; i++) { const x = 432 + i * 30, ph = (t * 0.4 + rnd(i)) % 1; figure(D, x, ry1 - 2, 0.8); D.vap(x + 8, ry1 - 48 - ph * 34, 2.4, 1 - ph); }
+  D.text(`${s.people} people`, 422, ry1 + 15, { size: 11, color: MUTED });
+  D.text(`Room  ${fx(room.T)} °C · ${Math.round(room.rh * 100)} %`, 604, 262, { size: 15, weight: 600, align: 'center', halo: true });
+  D.text(`${fx(room.w * 1000)} g/kg · vote ${s.pm.pmv > 0 ? '+' : ''}${fx(s.pm.pmv, 1)} · ${fx(s.pm.ppd, 0)} % dissatisfied`, 604, 282, { size: 12, color: INK2, align: 'center', halo: true });
+  if (!f.met) D.text('fan coils at full flow: the room overheats', 604, 302, { size: 12, weight: 600, color: HOT, align: 'center', halo: true });
+  // chilled water: one plant feeds the coil of the unit and the fan coils
+  const px0 = dx0, px1 = 236, py0 = 268, py1 = 338, qA = a.qCool ?? 0, qF = c.qTot;
+  D.rect(px0, py0, px1 - px0, py1 - py0, { fill: PAPER, stroke: INK, lw: 1.3, r: 4 });
+  D.text('Chilled water plant', px0 + 12, py0 + 22, { size: 11.5, color: MUTED });
+  D.text(`${fx((qA + qF) / 1000)} kW`, px0 + 12, py0 + 50, { size: 20, weight: 600, color: COLD });
+  D.poly([[px1, py0 + 16], [322, py0 + 16], [322, uy1 + 2]], qA > 30 ? COLD : '#c9c4ba', 2.2); D.poly([[px1, py1 - 14], [300, py1 - 14], [300, 368], [822, 368], [822, fy0 + 18], [fx1, fy0 + 18]], COLD, 2.2);
+  D.text(qA > 30 ? `unit coil ${fx(qA / 1000)} kW` : a.qHeat > 30 ? `unit heats ${fx(a.qHeat / 1000)} kW` : 'unit coil off', 330, py0 + 4, { size: 11.5, weight: 600, color: qA > 30 ? COLD : MUTED, halo: true });
+  D.text(`fan coils ${fx(qF / 1000)} kW`, 560, 384, { size: 11.5, weight: 600, color: COLD, align: 'center', halo: true });
 }

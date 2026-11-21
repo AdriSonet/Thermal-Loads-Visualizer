@@ -27,7 +27,7 @@ Then go to <http://localhost:5181/>. Three.js loads from a CDN, so an internet c
 
 `systems.html` (linked from the navigator of the 3D room) is a second page that follows the load into the equipment. It is read by scrolling: the drawing of the equipment and a psychrometric chart stay in place while the text passes, and every control recalculates both.
 
-Thirteen chapters: moist air and the chart, the six basic processes, a water coil close up (water, copper, fins, air), hot coil, cold coil dry and wet (condensate in kg/h, sensible, latent and total), the fan coil in the room, what the person feels (ISO 7730), the air handling unit, plate exchanger, rotary wheel, adiabatic cooling (direct and indirect) and the unit through the design day.
+Fourteen chapters: moist air and the chart (dew point, wet bulb, enthalpy), the six basic processes, a water coil close up (water, copper, fins, air), hot coil, cold coil dry and wet (condensate in kg/h, sensible, latent and total), the fan coil in the room, what the person feels (ISO 7730), the air handling unit, plate exchanger, rotary wheel, adiabatic cooling (direct and indirect), outdoors, system and room together with the total the plant pays, and the unit through the design day.
 
 Starting conditions come from the simulated lounge. Everything else is calculated on the page with a simplified model (`systems/psychro.js`, `systems/models.js`); it explains how the equipment behaves, it does not select a product. The models have tests:
 

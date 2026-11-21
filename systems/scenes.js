@@ -6,43 +6,78 @@ import { VW, VH, INK, INK2, MUTED, SOFT, LINE, LINE2, PAPER, HOT, COLD, VAP, WAT
 const mixAt = (a, b, f) => ({ T: lerp(a.T, b.T, f), w: lerp(a.w, b.w, f) });
 
 // ------------------------------------------------------------------ 0 · moist air
+// Shared frame of the chapter: every column stands on the same base line and under the same top line.
+const TOP = 80, BASE0 = 332, FH = BASE0 - TOP;
+const head = (D, s, x, align = 'center') => D.text(s, x, TOP - 14, { size: 12, color: MUTED, align });
+const foot = (D, s, x, color = INK, align = 'center') => D.text(s, x, BASE0 + 24, { size: 13, weight: 600, align, color });
+function fullness(D, x, w, T, st, sc, { title, note } = {}) {            // capacity at T as an outline, the vapour in it hatched; what does not fit is liquid
+  const ws = wSat(T), capH = Math.min(FH, ws * sc), cont = Math.min(st.w, ws), fillH = Math.min(capH, cont * sc), over = Math.max(0, st.w - ws);
+  D.rect(x, BASE0 - capH, w, capH, { fill: '#fff', stroke: INK, lw: 1.2 });
+  D.hatch(x, BASE0 - fillH, w, fillH, VAP);
+  if (over > 1e-5) { const oh = Math.max(3, over * sc); D.rect(x, BASE0 - capH - oh - 3, w, oh, { fill: WATER }); D.text(`${fx(over * 1000)} g does not fit`, x + w / 2, BASE0 - capH - oh - 9, { size: 11.5, weight: 600, color: COLD, align: 'center' }); }
+  if (title) head(D, title, x + w / 2);
+  if (note) foot(D, note, x + w / 2, over > 1e-5 ? COLD : INK);
+  return { capY: BASE0 - capH, fillY: BASE0 - fillH };
+}
 export function air(D, s, t) {
-  const { ctx } = D, st = s.air, ws = wSat(st.T), rh = st.w / ws * (0.621945 + ws) / (0.621945 + st.w);
-  // a box holding 1 kg of dry air; hollow dots are the water vapour mixed in it
-  const bx = 50, by = 62, bs = 270;
+  const st = s.air, ws = wSat(st.T), rh = rhFromW(st.T, st.w);
+  // 1 · a box holding 1 kg of dry air; hollow dots are the water vapour mixed in it
+  const bx = 40, by = TOP, bs = FH;
   D.rect(bx, by, bs, bs, { fill: '#fff', stroke: INK, lw: 1.2, r: 4 });
-  D.text('1 kg of dry air', bx, by - 9, { size: 12, color: MUTED });
-  D.text(`takes up ${fx(vol(st.T, st.w), 2)} m³`, bx + bs, by - 9, { size: 12, color: MUTED, align: 'right' });
-  const amp = 5 + (st.T + 10) / 55 * 9, nA = 70, nV = Math.round(clamp(st.w * 1000 * 5, 0, 140));
+  head(D, `1 kg of dry air, ${fx(vol(st.T, st.w), 2)} m³`, bx, 'left');
+  const amp = 5 + (st.T + 10) / 55 * 9, nA = 70, nV = Math.round(clamp(st.w * 1000 * 4, 0, 220));
   for (let i = 0; i < nA; i++) D.circle(bx + 12 + rnd(i) * (bs - 24) + Math.sin(t * 1.1 + i) * amp * 0.5, by + 12 + rnd(i + 50) * (bs - 24) + Math.cos(t * 0.9 + i * 1.7) * amp * 0.5, 2.2, { fill: tcol(st.T, 0.5) });
   for (let i = 0; i < nV; i++) D.vap(bx + 12 + rnd(i + 200) * (bs - 24) + Math.sin(t * 1.4 + i * 2.1) * amp, by + 12 + rnd(i + 300) * (bs - 24) + Math.cos(t * 1.2 + i) * amp, 3);
-  D.text(`${fx(st.w * 1000)} g of water vapour`, bx + bs / 2, by + bs + 20, { size: 13, weight: 600, align: 'center', color: '#4f6f8f' });
-
-  // how full the air is: capacity grows with temperature, the content is the humidity ratio
-  const gx = 392, base = by + bs, sc = 250 / 0.040, capH = Math.min(250, ws * sc), fillH = Math.min(capH, st.w * sc);
-  D.rect(gx, base - capH, 62, capH, { fill: '#fff', stroke: INK, lw: 1.2 });
-  D.hatch(gx, base - fillH, 62, fillH, VAP);
-  if (ws * sc > 250) { D.line(gx - 4, base - 250, gx + 66, base - 250, PAPER, 5); D.line(gx - 4, base - 254, gx + 66, base - 246, INK, 1); }
-  D.text('How full', gx + 31, by - 9, { size: 12, color: MUTED, align: 'center' });
-  D.text(`${Math.round(rh * 100)} %`, gx + 31, base + 20, { size: 13, weight: 600, align: 'center' });
-  D.text(`holds up to ${fx(ws * 1000)} g`, gx + 72, base - capH + 10, { size: 11.5, color: MUTED });
-  D.text(`has ${fx(st.w * 1000)} g`, gx + 72, base - fillH + 4, { size: 11.5, color: '#4f6f8f' });
-
-  // enthalpy: the heat in the dry air plus the heat that evaporated the water
-  const ex = 590, hs = CP_AIR * st.T / 1000, hl = st.w * (H_FG0 + CP_VAP * st.T) / 1000, k = 250 / 110, zero = base - 22;
-  D.text('Enthalpy, kJ/kg', ex + 31, by - 9, { size: 12, color: MUTED, align: 'center' });
-  D.line(ex - 8, zero, ex + 70, zero, SOFT, 1);
-  D.rect(ex, zero - hs * k, 62, hs * k, { fill: HOT });
+  foot(D, `${fx(st.w * 1000)} g of water vapour`, bx + bs / 2, '#4f6f8f');
+  // 2 · how full: capacity grows with temperature, the content is the humidity ratio
+  const gx = 340, sc = FH / Math.max(0.035, ws);
+  const f = fullness(D, gx, 66, st.T, st, sc, { title: 'How full', note: `${Math.round(rh * 100)} %` });
+  D.text(`holds up to ${fx(ws * 1000)} g`, gx + 74, f.capY + 11, { size: 11.5, color: MUTED });
+  if (f.fillY - f.capY > 30) D.text(`has ${fx(st.w * 1000)} g`, gx + 74, f.fillY + 11, { size: 11.5, color: '#4f6f8f' });
+  // 3 · enthalpy: the heat in the dry air plus the heat that evaporated the water
+  const ex = 510, hs = CP_AIR * st.T / 1000, hl = st.w * (H_FG0 + CP_VAP * st.T) / 1000, neg = Math.max(0, -hs), k = (FH - 6) / Math.max(100, hl + Math.max(hs, 0) + neg + 4), zero = BASE0 - neg * k;
+  head(D, 'Enthalpy, kJ/kg', ex + 33);
+  D.line(ex - 8, zero, ex + 74, zero, SOFT, 1);
+  D.rect(ex, zero - hs * k, 66, hs * k, { fill: HOT });
   const top = zero - Math.max(0, hs) * k;
-  D.hatch(ex, top - hl * k, 62, hl * k, VAP);
-  D.text(`${fx(hs + hl)}`, ex + 31, Math.min(top - hl * k, zero) - 8, { size: 15, weight: 600, align: 'center' });
-  D.text(`sensible ${fx(hs)}`, ex + 72, zero - hs * k / 2 + 4, { size: 11.5, color: HOT });
-  D.text(`latent ${fx(hl)}`, ex + 72, top - hl * k / 2 + 4, { size: 11.5, color: '#4f6f8f' });
-  D.text('0 at 0 °C, dry', ex + 72, zero + 14, { size: 10.5, color: SOFT });
-  // the two temperatures hidden in the humidity
-  D.text(`dew point ${fx(tdp(st.w))} °C`, 716, by + 60, { size: 12, color: INK2 });
-  D.text(`wet bulb ${fx(twb(st.T, st.w))} °C`, 716, by + 80, { size: 12, color: INK2 });
-  D.text(`dry bulb ${fx(st.T)} °C`, 716, by + 40, { size: 12, weight: 600, color: INK });
+  D.hatch(ex, top - hl * k, 66, hl * k, VAP);
+  if (Math.abs(hs * k) > 14) D.text(`sensible ${fx(hs)}`, ex + 74, zero - hs * k / 2 + 4, { size: 11.5, color: HOT });
+  if (hl * k > 14) D.text(`latent ${fx(hl)}`, ex + 74, top - hl * k / 2 + 4, { size: 11.5, color: '#4f6f8f' });
+  foot(D, `${fx(hs + hl)} kJ/kg`, ex + 33);
+  // 4 · the three temperatures of this air on one thermometer
+  const tx = 716, lo = -10, hi = 52, Y = T => BASE0 - (clamp(T, lo, hi) - lo) / (hi - lo) * FH;
+  head(D, 'Its three temperatures', tx - 20, 'left');
+  D.rect(tx - 4, TOP, 8, FH, { fill: LINE2, r: 4 }); D.rect(tx - 4, Y(st.T), 8, BASE0 - Y(st.T), { fill: tcol(st.T), r: 4 });
+  for (let T = 0; T <= 50; T += 10) { D.line(tx - 10, Y(T), tx - 5, Y(T), SOFT, 1); D.text(`${T}`, tx - 14, Y(T) + 4, { size: 10.5, color: SOFT, align: 'right' }); }
+  const marks = [['dry bulb', st.T, INK], ['wet bulb', twb(st.T, st.w), '#4f6f8f'], ['dew point', tdp(st.w), COLD]]; let last = -99;
+  for (const [n, T, c] of marks) { let yy = Y(T); D.line(tx + 5, yy, tx + 14, yy, c, 2); if (yy - last < 15) yy = last + 15; last = yy; D.text(`${n} ${fx(T)} °C`, tx + 18, yy + 4, { size: 11.5, color: c, weight: n === 'dry bulb' ? 600 : 400 }); }
+}
+
+// ------------------------------------------------------------------ 0 · the dew point: the same water in a shrinking space
+export function dew(D, s, t) {
+  const { ctx } = D, st = s.air, d = tdp(st.w), Tc = s.surfT, wet = Tc < d - 0.02, over = Math.max(0, st.w - wSat(Tc));
+  // a glass of cold water standing in this air
+  const gx0 = 96, gx1 = 236, gy0 = 118, gy1 = BASE0;
+  head(D, 'A cold glass standing in this air', 40, 'left');
+  for (let i = 0; i < 46; i++) { const x = 40 + rnd(i) * 252, y = TOP + 6 + rnd(i + 20) * (FH - 12); if (x > gx0 - 14 && x < gx1 + 14 && y > gy0 - 8) continue; if (i % 3 === 0) D.vap(x + Math.sin(t + i) * 5, y + Math.cos(t * 0.8 + i) * 5, 2.8); else D.circle(x + Math.sin(t * 1.1 + i) * 4, y + Math.cos(t + i) * 4, 2.2, { fill: tcol(st.T, 0.5) }); }
+  ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx0 + 14, gy1); ctx.lineTo(gx1 - 14, gy1); ctx.lineTo(gx1, gy0); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.save(); ctx.clip(); D.rect(gx0, gy0 + 26, gx1 - gx0, gy1 - gy0, { fill: tcol(Tc, 0.5) }); ctx.restore();
+  ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx0 + 14, gy1); ctx.lineTo(gx1 - 14, gy1); ctx.lineTo(gx1, gy0); ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.stroke();
+  D.text(`${fx(Tc)} °C`, (gx0 + gx1) / 2, (gy0 + gy1) / 2 + 20, { size: 15, weight: 600, align: 'center', color: INK });
+  if (wet) {
+    const n = Math.round(clamp(6 + over * 1000 * 2.5, 6, 30));
+    for (let i = 0; i < n; i++) { const side = i % 2 ? 1 : -1, ph = (t * (0.12 + 0.02 * (i % 5)) + rnd(i + 3)) % 1, yy = lerp(gy0 + 10, gy1 - 4, ph), edge = side < 0 ? gx0 + 14 * (yy - gy0) / (gy1 - gy0) : gx1 - 14 * (yy - gy0) / (gy1 - gy0); D.drop(edge + side * (3 + rnd(i) * 3), yy, 1.8 + ph * 2.2); }
+    D.rect(gx0 - 6, gy1 - 2, gx1 - gx0 + 12, 4, { fill: WATER, r: 2 });
+  }
+  foot(D, wet ? 'colder than the dew point: it gets wet' : 'warmer than the dew point: it stays dry', 166, wet ? COLD : INK);
+  // the same air three times: as it is, cooled until it is full, and at the surface of the glass
+  const sc = FH / Math.max(wSat(Math.max(st.T, Tc)), st.w * 1.15, 0.012), bw = 78, xs = [392, 550, 708];
+  fullness(D, xs[0], bw, st.T, st, sc, { title: `The air, ${fx(st.T)} °C`, note: `${Math.round(rhFromW(st.T, st.w) * 100)} % full` });
+  fullness(D, xs[1], bw, d, st, sc, { title: `Cooled to ${fx(d)} °C`, note: '100 %: dew point' });
+  fullness(D, xs[2], bw, Tc, st, sc, { title: `At the glass, ${fx(Tc)} °C`, note: wet ? `${fx(over * 1000)} g condense` : `${Math.round(rhFromW(Tc, st.w) * 100)} % full` });
+  for (const x of [xs[0] + bw + 14, xs[1] + bw + 14]) D.arrow(x, BASE0 - 40, x + 52, BASE0 - 40, MUTED, 1.4);
+  D.text('cool it', xs[0] + bw + 40, BASE0 - 48, { size: 11, color: MUTED, align: 'center' }); D.text(Tc < d ? 'cool it more' : 'the glass', xs[1] + bw + 40, BASE0 - 48, { size: 11, color: MUTED, align: 'center' });
+  D.text(`the same ${fx(st.w * 1000)} g of vapour in each column; the outline is the most the air can hold there`, 810, BASE0 + 48, { size: 11.5, color: MUTED, align: 'right' });
 }
 
 // ------------------------------------------------------------------ 1 · one process in a duct
@@ -137,7 +172,7 @@ export function coilSection(D, s, t) {
 // ------------------------------------------------------------------ 3–5 · the coil at work
 export function coilFlow(D, s, t) {
   const { ctx } = D, c = s.c, rows = c.geo.rows, SEG = 6, N = rows * SEG, path = c.path;
-  const x0 = 30, x1 = 810, y0 = 84, y1 = 214, rw = clamp(232 / rows, 24, 44), cx0 = 420 - rows * rw / 2, cx1 = 420 + rows * rw / 2;
+  const x0 = 30, x1 = 810, y0 = 88, y1 = 210, rw = clamp(232 / rows, 24, 44), cx0 = 420 - rows * rw / 2, cx1 = 420 + rows * rw / 2;
   const col = c.heating ? HOT : COLD;
   const at = (u, x) => { if (x <= cx0) return s.airIn; if (x >= cx1) return c.out; const f = (x - cx0) / (cx1 - cx0) * N, i = Math.min(N - 1, Math.floor(f)); return mixAt(path[i], path[i + 1], f - i); };
   D.rect(x0, y0, x1 - x0, y1 - y0, { fill: '#fff' }); D.line(x0, y0, x1, y0, INK, 1.4); D.line(x0, y1, x1, y1, INK, 1.4);
@@ -169,25 +204,42 @@ export function coilFlow(D, s, t) {
   D.tag(x0 + 6, y1 + 26, s.airIn, { id: s.ids?.[0] ?? '1' });
   D.tag(x1 - 6, y1 + 26, c.out, { id: s.ids?.[1] ?? '2', align: 'right' });
 
-  // profile through the depth of the coil: air, surface, water and the dew point of the air
-  const gx0 = 170, gx1 = 640, gy0 = 290, gy1 = 388;
-  const dewAt = path.map(q => tdp(q.w)), vals = path.flatMap((q, i) => [q.T, q.Tw, q.Ts ?? q.T]).concat(c.heating ? [] : dewAt), lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
-  const X = i => gx0 + i / N * (gx1 - gx0), Y = T => gy1 - (T - lo) / (hi - lo) * (gy1 - gy0);
-  D.rect(gx0, gy0, gx1 - gx0, gy1 - gy0, { fill: '#fff', stroke: LINE });
-  for (let r = 1; r < rows; r++) D.line(X(r * SEG), gy0, X(r * SEG), gy1, LINE2, 1);
-  if (!c.heating) D.poly(path.map((q, i) => [X(i), Y(dewAt[i])]), VAP, 1.3, [4, 3]);
-  D.poly(path.map((q, i) => [X(i), Y(q.Tw)]), col, 1.3, [2, 3]);
-  D.poly(path.slice(1).map((q, i) => [X(i + 0.5), Y(q.Ts)]), col, 2.4);
-  D.poly(path.map((q, i) => [X(i), Y(q.T)]), INK, 2);
-  const ends = [['air', path[N].T, INK], ['surface', path[N].Ts, col], ['water', path[N].Tw, col]]; if (!c.heating) ends.push(['dew point', dewAt[N], '#4f6f8f']);
-  ends.sort((a, b) => Y(a[1]) - Y(b[1])); let last = -99;
-  for (const e of ends) { let yv = Y(e[1]) + 4; if (yv - last < 12) yv = last + 12; last = yv; D.text(`${e[0]} ${fx(e[1])} °C`, gx1 + 8, yv, { size: 11, color: e[2] }); }
-  D.text('through the rows →', gx0, gy0 - 6, { size: 11, color: MUTED });
-  D.text(`${fx(hi, 0)} °C`, gx0 - 6, gy0 + 9, { size: 10.5, color: SOFT, align: 'right' }); D.text(`${fx(lo, 0)} °C`, gx0 - 6, gy1, { size: 10.5, color: SOFT, align: 'right' });
+  // two panels under the duct, through the depth of the coil: temperatures, and the heat taken out so far
+  const py0 = 296, py1 = 384, dewAt = path.map(q => tdp(q.w));
+  {
+    const gx0 = 30, gx1 = 300, vals = path.flatMap(q => [q.T, q.Tw, q.Ts ?? q.T]).concat(c.heating ? [] : dewAt), lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
+    const X = i => gx0 + i / N * (gx1 - gx0), Y = T => py1 - (T - lo) / (hi - lo) * (py1 - py0);
+    D.rect(gx0, py0, gx1 - gx0, py1 - py0, { fill: '#fff', stroke: LINE });
+    for (let r = 1; r < rows; r++) D.line(X(r * SEG), py0, X(r * SEG), py1, LINE2, 1);
+    // the gap between air and surface is what drives the heat
+    D.area([...path.map((q, i) => [X(i), Y(q.T)]), ...path.slice(1).map((q, i) => [X(i + 0.5), Y(q.Ts)]).reverse(), [X(0), Y(path[1].Ts)]], c.heating ? 'rgba(200,68,47,.10)' : 'rgba(47,111,192,.10)');
+    if (!c.heating) D.poly(path.map((q, i) => [X(i), Y(dewAt[i])]), VAP, 1.3, [4, 3]);
+    D.poly(path.map((q, i) => [X(i), Y(q.Tw)]), col, 1.3, [2, 3]);
+    D.poly([[X(0), Y(path[1].Ts)], ...path.slice(1).map((q, i) => [X(i + 0.5), Y(q.Ts)])], col, 2.4);
+    D.poly(path.map((q, i) => [X(i), Y(q.T)]), INK, 2);
+    const ends = [['air', path[N].T, INK], ['surface', path[N].Ts, col], ['water', path[N].Tw, col]]; if (!c.heating) ends.push(['dew point', dewAt[N], '#4f6f8f']);
+    ends.sort((a, b) => Y(a[1]) - Y(b[1])); let last = -99;
+    for (const e of ends) { let yv = Y(e[1]) + 4; if (yv - last < 12) yv = last + 12; last = yv; D.text(`${e[0]} ${fx(e[1])} °C`, gx1 + 8, yv, { size: 11, color: e[2] }); }
+    D.text('Temperatures through the rows, °C', gx0, py0 - 7, { size: 11, color: MUTED });
+  }
+  {
+    const gx0 = 450, gx1 = 690, m = c.mAir ?? 0, sgn = c.heating ? -1 : 1, cpm = CP_AIR + s.airIn.w * CP_VAP, h0 = h(s.airIn.T, s.airIn.w);
+    const qS = path.map(q => sgn * m * cpm * (s.airIn.T - q.T) / 1000), qT = path.map(q => sgn * m * (h0 - h(q.T, q.w)) / 1000), top = Math.max(qT[N], qS[N], 0.1) * 1.08;
+    const X = i => gx0 + i / N * (gx1 - gx0), Y = v => py1 - Math.max(0, v) / top * (py1 - py0);
+    D.rect(gx0, py0, gx1 - gx0, py1 - py0, { fill: '#fff', stroke: LINE });
+    for (let r = 1; r < rows; r++) D.line(X(r * SEG), py0, X(r * SEG), py1, LINE2, 1);
+    D.area([[X(0), py1], ...qS.map((v, i) => [X(i), Y(v)]), [X(N), py1]], 'rgba(200,68,47,.78)');
+    if (qT[N] - qS[N] > 0.01) D.hatchArea([...qS.map((v, i) => [X(i), Y(v)]), ...qT.map((v, i) => [X(i), Y(v)]).reverse()], VAP, 4);
+    D.poly(qT.map((v, i) => [X(i), Y(v)]), INK, 1.8);
+    D.text(c.heating ? 'Heat given to the air so far, kW' : 'Heat taken out of the air so far, kW', gx0, py0 - 7, { size: 11, color: MUTED });
+    D.text(`total ${fx(qT[N])} kW`, gx1 + 8, py0 + 12, { size: 12, weight: 600, color: INK });
+    if (qT[N] - qS[N] > 0.01) D.text(`latent ${fx(qT[N] - qS[N])}`, gx1 + 8, py0 + 30, { size: 11, color: '#4f6f8f' });
+    D.text(`sensible ${fx(qS[N])}`, gx1 + 8, py0 + 46, { size: 11, color: HOT });
+  }
 }
 
 // ------------------------------------------------------------------ 6 · the room and its fan coil
-function figure(D, x, y, sc = 1, color = INK2) {
+export function figure(D, x, y, sc = 1, color = INK2) {
   const { ctx } = D; D.circle(x, y - 46 * sc, 7 * sc, { fill: color });
   ctx.beginPath(); ctx.roundRect(x - 8 * sc, y - 37 * sc, 16 * sc, 24 * sc, 5 * sc); ctx.fillStyle = color; ctx.fill();
   D.line(x - 4 * sc, y - 14 * sc, x - 5 * sc, y, color, 4.5 * sc); D.line(x + 4 * sc, y - 14 * sc, x + 5 * sc, y, color, 4.5 * sc);
@@ -232,7 +284,7 @@ export function room(D, s, t) {
   D.text(`water ${fx(s.water.Tin)} °C · valve ${Math.round(f.valve * 100)} % open`, rx0, ry0 - 9, { size: 12, color: f.met ? INK2 : HOT, weight: f.met ? 400 : 600 });
 
   // the room humidity settling, from where the lounge was to where this coil leaves it
-  const gx0 = 606, gx1 = 806, gy0 = 96, gy1 = 250, ser = f.series, ws = ser.map(q => q.w * 1000).concat(eq.w * 1000), lo = Math.floor(Math.min(...ws) - 1), hi = Math.ceil(Math.max(...ws) + 1);
+  const gx0 = 606, gx1 = 806, gy0 = 82, gy1 = 262, ser = f.series, ws = ser.map(q => q.w * 1000).concat(eq.w * 1000), lo = Math.floor(Math.min(...ws) - 1), hi = Math.ceil(Math.max(...ws) + 1);
   const X = i => gx0 + i / (ser.length - 1) * (gx1 - gx0), Y = v => gy1 - (v - lo) / (hi - lo) * (gy1 - gy0);
   D.text('Room humidity, g/kg', gx0, gy0 - 22, { size: 11.5, color: MUTED });
   D.rect(gx0, gy0, gx1 - gx0, gy1 - gy0, { fill: '#fff', stroke: LINE });
@@ -240,6 +292,7 @@ export function room(D, s, t) {
   const n = ser.length, head = D.env.still ? n - 1 : Math.min(n - 1, ((t * 0.22) % 1.35) * (n - 1));
   const pts = []; for (let i = 0; i <= Math.floor(head); i++) pts.push([X(i), Y(ser[i].w * 1000)]);
   const fi = Math.floor(head), fr = head - fi; if (fi < n - 1) pts.push([X(head), Y(lerp(ser[fi].w, ser[fi + 1].w, fr) * 1000)]);
+  D.area([...pts, [pts.at(-1)[0], Y(eq.w * 1000)], [pts[0][0], Y(eq.w * 1000)]], 'rgba(111,138,166,.22)');
   D.poly(pts, INK, 2); const lp = pts.at(-1); D.circle(lp[0], lp[1], 3.5, { fill: INK });
   D.text(`${hi}`, gx0 - 5, gy0 + 9, { size: 10.5, color: SOFT, align: 'right' }); D.text(`${lo}`, gx0 - 5, gy1, { size: 10.5, color: SOFT, align: 'right' });
   D.text('now', gx0, gy1 + 14, { size: 10.5, color: SOFT }); D.text(`${Math.round(ser.at(-1).t / 60)} min`, gx1, gy1 + 14, { size: 10.5, color: SOFT, align: 'right' });
