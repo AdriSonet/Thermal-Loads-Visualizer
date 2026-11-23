@@ -73,7 +73,7 @@ function drawScene(t) {
 }
 const chart = createChart($('chart'));
 chart.onProbe(s => { S.probeT = Math.round(s.T * 2) / 2; S.probeRH = Math.max(2, Math.min(100, Math.round(s.w / wSatAt(S.probeT) * 100))); syncControls(); update(); });
-chart.onHover(s => { $('chartRead').textContent = s ? chart.describe(s) : ''; });
+chart.onHover((s, id) => { $('chartRead').textContent = s ? (id ? id + ' · ' : '') + chart.describe(s) : ''; });
 import { wSat as wSatAt } from './psychro.js';
 
 // ---------------------------------------------------------------- balance bar
@@ -111,7 +111,7 @@ function update() {
   const st = steps[active]; if (!st) return;
   try { R = st.compute(S); } catch (e) { console.error('step', st.title, e); return; }
   drawScene.err = false;
-  chart.set(R.chart); balance(R.balance);
+  chart.set(R.chart, active); balance(R.balance);
   $('sceneCap').textContent = R.cap ?? ''; $('sceneNote').textContent = 'calculated on this page, simplified model';
   canvas.setAttribute('aria-label', `${R.cap ?? st.title}. ${(R.facts ?? []).map(f => `${f[2]}: ${f[0]} ${f[1]}`).join('; ')}`);
   st.el.querySelector('.facts').innerHTML = (R.facts ?? []).map(([v, u, k, cls]) => `<div class="fact ${cls ?? ''}"><div class="v num">${v}${u ? ` <small>${u}</small>` : ''}</div><div class="k">${k}</div></div>`).join('');

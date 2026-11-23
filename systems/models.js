@@ -56,6 +56,13 @@ function finEfficiency(ha, G) {
   return Math.tanh(x) / x;
 }
 
+// air cannot stay above saturation: the excess vapour condenses and its latent heat warms the air (same enthalpy)
+export function defog(s, p = P_SITE) {
+  if (s.w <= wSat(s.T, p)) return s;
+  const h0 = h(s.T, s.w), T = bisect(x => h(x, wSat(x, p)) - h0, s.T, s.T + 40, 40, 1e-9);
+  return { T, w: wSat(T, p) };
+}
+
 export function coil({ air, mAir, water, geo, p = P_SITE }) {
   const G = coilGeometry(geo), SEG = 6, N = G.rows * SEG;
   const heating = water.Tin > air.T;
@@ -75,7 +82,7 @@ export function coil({ air, mAir, water, geo, p = P_SITE }) {
       const hfg = H_FG0 + CP_VAP * T;
       const qAir = Ts => cap * ((T - Ts) + hfg / cpm * Math.max(0, w - wSat(Ts, p)));
       const Ts = bisect(x => (x - Tw) / Ri - qAir(x), Math.min(Tw, T), Math.max(Tw, T), 30, 1e-8);
-      const ws = wSat(Ts, p), T2 = T - eff * (T - Ts), w2 = w > ws ? w - eff * (w - ws) : w;
+      const ws = wSat(Ts, p), { T: T2, w: w2 } = defog({ T: T - eff * (T - Ts), w: w > ws ? w - eff * (w - ws) : w }, p);
       const dm = mAir * (w - w2), dq = mAir * (h(T, w) - h(T2, w2)) - dm * CP_WATER * Ts;        // the drained water leaves at Ts
       if (dm > 0) wet++;
       cond += dm; tsSum += Ts; T = T2; w = w2; Tw = clamp(Tw - dq / mcw, -30, 130);
@@ -125,11 +132,13 @@ export const RECOVERY = {
 };
 export function recovery({ outdoor, exhaust, mOut, mExh = mOut, effS, effL, p = P_SITE }) {
   const cmin = Math.min(mOut, mExh);
-  const supply = { T: outdoor.T - effS * cmin / mOut * (outdoor.T - exhaust.T), w: outdoor.w - effL * cmin / mOut * (outdoor.w - exhaust.w) };
-  const exhaustOut = { T: exhaust.T + effS * cmin / mExh * (outdoor.T - exhaust.T), w: exhaust.w + effL * cmin / mExh * (outdoor.w - exhaust.w) };
-  const over = exhaustOut.w - wSat(exhaustOut.T, p), condensing = over > 0;
+  // either stream may be cooled below its dew point: it then leaves saturated, the rest drains as water
+  const dryS = { T: outdoor.T - effS * cmin / mOut * (outdoor.T - exhaust.T), w: outdoor.w - effL * cmin / mOut * (outdoor.w - exhaust.w) };
+  const dryX = { T: exhaust.T + effS * cmin / mExh * (outdoor.T - exhaust.T), w: exhaust.w + effL * cmin / mExh * (outdoor.w - exhaust.w) };
+  const supply = defog(dryS, p), exhaustOut = defog(dryX, p);
+  const over = dryX.w - exhaustOut.w, condensing = over > 0;
   const qSens = mOut * (CP_AIR + outdoor.w * CP_VAP) * (outdoor.T - supply.T), qTot = mOut * (h(outdoor.T, outdoor.w) - h(supply.T, supply.w));
-  return { supply, exhaustOut, qSens, qLat: qTot - qSens, qTot, condensing, frost: condensing && exhaustOut.T < 0, condensate: condensing ? mExh * over : 0 };
+  return { supply, exhaustOut, qSens, qLat: qTot - qSens, qTot, condensing, frost: condensing && dryX.T < 0, condensate: condensing ? mExh * over : 0, supplyCondensate: mOut * (dryS.w - supply.w) };
 }
 export function adiabatic({ air, eff = 0.85, p = P_SITE }) {
   const B = twb(air.T, air.w, p), T = air.T - eff * (air.T - B);

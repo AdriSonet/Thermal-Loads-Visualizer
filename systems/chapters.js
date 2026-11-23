@@ -98,7 +98,7 @@ function coilView(S, c, airIn, { ids = ['1', '2'], guides = true, adp = false, t
   if (adp && c.condensate > 0) g.push({ type: 'line', a: airIn, b: { T: c.adp, w: wSat(c.adp) } }, { type: 'sat', T: c.adp, label: `apparatus dew point ${fx(c.adp)} °C`, color: '#1b1b1b' });
   return {
     scene: { name: 'coilFlow', c, airIn, water: { Tin: c.heating ? S.waterHot : S.waterCold, flow: S.flow / 3600 }, ids },
-    chart: { points: [{ id: ids[0], ...airIn, pos: 'tr' }, { id: ids[1], ...c.out, pos: c.heating ? 'tr' : 'bl' }], paths: [{ pts: c.path, kind, flow: true }], guides: g },
+    chart: { points: [{ id: ids[0], ...airIn, pos: 'tr' }, { id: ids[1], ...c.out, pos: c.heating ? 'tr' : 'bl' }], paths: [{ pts: c.path, kind, flow: true }], guides: g, m },
     balance: { title: title ?? (c.heating ? 'Heating coil' : 'Cooling coil'), sub: sub ?? `what ${fx(m * 3600 * vol(airIn.T, airIn.w), 0)} m³/h of air gains or loses`, m, a: airIn, b: c.out, water: -c.condensate },
     loads: coilLoads(c),
   };
@@ -121,7 +121,7 @@ function ahuView(S, a, { type = S.recType, adia = false, title = 'Coils of the u
   pts.push({ id: 'S', ...P.S, pos: 'tr', color: '#8a5a9e' }); paths.push({ pts: [P['3'], P.S], kind: 'room', flow: true, noArrow: true });
   return {
     scene: { name: 'ahu', a, pts: P, type, adiabatic: adia, mOA: MOA, season: S.season },
-    chart: { points: pts, paths, guides: [] },
+    chart: { points: pts, paths, guides: [], m: MOA },
     balance: { title, sub: `outdoor air after the recovery, ${fx(MOA * 3600 * 0.86, 0)} m³/h`, m: MOA, a: P['1'], b: P['3'], water: -(a.cool?.condensate ?? 0) },
     loads: ahuLoads(a, P.O, P.R, MOA),
   };
@@ -387,7 +387,7 @@ function fcOf(S, mode) {
 function fcView(S, mode) {
   const f = fcOf(S, mode), c = f.coil, room = f.eq;
   return { scene: { name: 'room', fc: f, water: { Tin: f.waterIn }, people: S.people }, cap: 'The lounge and its fan coils, in section',
-    chart: { points: [{ id: 'Room', ...room, pos: 'tr' }, { id: 'Supply', ...c.out, pos: 'bl' }], paths: [{ pts: c.path.map(q => ({ T: q.T, w: q.w })), kind: c.condensate > 0 ? 'wet' : 'cool', flow: true }, { pts: [c.out, room], kind: 'room', dash: true, flow: true }], guides: [{ type: 'dew', ...room }, { type: 'sat', T: c.tsMean, label: `surface ${fx(c.tsMean)} °C` }] },
+    chart: { points: [{ id: 'Room', ...room, pos: 'tr' }, { id: 'Supply', ...c.out, pos: 'bl' }], paths: [{ pts: c.path.map(q => ({ T: q.T, w: q.w })), kind: c.condensate > 0 ? 'wet' : 'cool', flow: true }, { pts: [c.out, room], kind: 'room', dash: true, flow: true }], guides: [{ type: 'dew', ...room }, { type: 'sat', T: c.tsMean, label: `surface ${fx(c.tsMean)} °C` }], m: mode === 'warm' ? 0.9 : 0.65 },
     balance: { title: 'Fan coil', sub: `room load ${kW(f.loadS)} kW sensible, ${kW(f.loadL)} kW latent`, m: mode === 'warm' ? 0.9 : 0.65, a: room, b: c.out, water: -c.condensate },
     facts: [[pct(room.rh), '%', `room humidity, ${gkg(room.w)} g/kg`, 'vap'], [kW(c.qTot), 'kW', 'total the fan coils remove', 'cold'], [fx(c.condensate * 3600, 2), 'kg/h', 'condensed', 'vap']],
     loads: [{ label: 'Room load', s: f.loadS, l: f.loadL }, { label: 'Fan coils remove', s: c.qSens, l: c.qLat, strong: true }],
@@ -397,7 +397,7 @@ function fcView(S, mode) {
 function recView(S, type, sceneName) {
   const out = outdoor(S), room = roomOf(S), e = eff(S, type), r = recovery({ outdoor: out, exhaust: room, mOut: MOA, effS: e.effS, effL: e.effL }), win = S.season === 'winter';
   return { scene: { name: sceneName, r, outdoor: out, exhaust: room, membrane: type === 'membrane', sorption: type === 'sorption', rpm: S.rpm }, cap: sceneName === 'wheel' ? 'Rotary wheel, from the front and from the side' : 'Plate heat exchanger, a few channels',
-    chart: { points: [{ id: 'O', ...out, pos: win ? 'bl' : 'tr' }, { id: '1', ...r.supply, pos: win ? 'br' : 'tr' }, { id: 'R', ...room, pos: 'tl', hollow: true }, { id: 'X', ...r.exhaustOut, pos: win ? 'tl' : 'br', hollow: true }], paths: [{ pts: [room, r.exhaustOut], kind: 'faint', dash: true }, { pts: [out, r.supply], kind: 'rec', flow: true }], guides: win ? [{ type: 'dew', ...room }] : [] },
+    chart: { points: [{ id: 'O', ...out, pos: win ? 'bl' : 'tr' }, { id: '1', ...r.supply, pos: win ? 'br' : 'tr' }, { id: 'R', ...room, pos: 'tl', hollow: true }, { id: 'X', ...r.exhaustOut, pos: win ? 'tl' : 'br', hollow: true }], paths: [{ pts: [room, r.exhaustOut], kind: 'faint', dash: true }, { pts: [out, r.supply], kind: 'rec', flow: true }], guides: win ? [{ type: 'dew', ...room }] : [], m: MOA },
     balance: { title: RECOVERY[type].label, sub: `what the outdoor air gains or loses, ${fx(MOA * 3600 * 0.86, 0)} m³/h`, m: MOA, a: out, b: r.supply, water: (r.supply.w - out.w) * MOA },
     facts: [[fx(r.supply.T), '°C', `supply after it, from ${fx(out.T)} °C`], [`${pct(e.effS)} / ${pct(e.effL)}`, '%', 'heat / moisture recovered'], [kW(Math.abs(r.qTot)), 'kW', 'the coils do not have to supply', win ? 'hot' : 'cold']],
     warn: r.frost ? 'Below 0 °C and saturated: frost forms in the exhaust side.' : '',

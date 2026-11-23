@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recovery, RECOVERY, adiabatic, mix, fanCoilRoom, primaryAhu, pmv, COIL_DEFAULT } from '../models.js';
+import { recovery, RECOVERY, adiabatic, mix, fanCoilRoom, primaryAhu, pmv, coil, defog, COIL_DEFAULT } from '../models.js';
 import { wFromRh, h, twb, wSat } from '../psychro.js';
 
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} got ${a}, expected ${b} ± ${tol}`);
@@ -22,9 +22,22 @@ test('winter: condensation and frost on the extract side', () => {
   const mild = recovery({ outdoor: { T: 2, w: 0.0036 }, exhaust: exh, mOut: 0.45, ...RECOVERY.plate });
   assert.ok(mild.condensing && !mild.frost && mild.condensate > 0);
   const cold = recovery({ outdoor: { T: -12, w: 0.001 }, exhaust: exh, mOut: 0.45, effS: 0.85, effL: 0 });
-  assert.ok(cold.exhaustOut.T < 0 && cold.frost);
+  assert.ok(cold.frost && cold.exhaustOut.w <= wSat(cold.exhaustOut.T) + 1e-9);
   const dry = recovery({ outdoor: { T: 2, w: 0.0036 }, exhaust: { T: 21, w: 0.004 }, mOut: 0.45, ...RECOVERY.plate });
   assert.ok(!dry.condensing);
+});
+test('no state is left above saturation', () => {
+  const coast = { T: 31, w: 0.0205 };
+  const r = recovery({ outdoor: coast, exhaust: { T: 19.4, w: 0.0133 }, mOut: 0.45, ...RECOVERY.plate });
+  assert.ok(r.supply.w <= wSat(r.supply.T) + 1e-9 && r.supply.w < coast.w && r.supplyCondensate > 0 && r.qLat > 0);
+  near(h(r.supply.T, r.supply.w), h(31 - 0.73 * 11.6, coast.w), 1, 'the heat handed over does not change');
+  const f = defog({ T: 20, w: 0.02 }); near(h(f.T, f.w), h(20, 0.02), 0.01); assert.ok(f.T > 20 && f.w < 0.02);
+  assert.deepEqual(defog({ T: 20, w: 0.005 }), { T: 20, w: 0.005 });
+  for (const air of [r.supply, { T: 22, w: wSat(22) }, { T: 30, w: wSat(30) * 0.97 }]) {
+    const c = coil({ air, mAir: 0.45, water: { Tin: 7, flow: 0.5 }, geo: { rows: 6 } });
+    for (const q of c.path) assert.ok(q.w <= wSat(q.T) * (1 + 1e-9), `coil path at ${q.T}`);
+    near(c.closure, 0, 0.003, 'energy still closes');
+  }
 });
 test('adiabatic humidifier follows the wet-bulb line; enthalpy barely moves', () => {
   const r = adiabatic({ air: summer, eff: 0.85 });

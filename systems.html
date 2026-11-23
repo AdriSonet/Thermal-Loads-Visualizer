@@ -59,6 +59,30 @@
   #scene, #chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #chart { touch-action: none; }
   #viewSeg { display: none; }
+  /* ---- chart: zoom buttons and the table of numbers */
+  .zui { position: absolute; top: 30px; left: 10px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: calc(100% - 20px); pointer-events: none; }
+  .zui > * { pointer-events: auto; }
+  .zbar { display: flex; gap: 4px; flex-wrap: wrap; }
+  .zbar button { height: 24px; min-width: 24px; padding: 0 8px; font-size: 11.5px; font-weight: 500; line-height: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink-2); }
+  .zbar button:hover:not(:disabled) { background: var(--hover); }
+  .zbar button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .zbar button:disabled { opacity: .4; cursor: default; }
+  .ztab { background: rgba(253,252,250,.94); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px 6px; overflow: auto; max-width: 100%; box-shadow: 0 1px 3px rgba(40,32,20,.05); }
+  .ztab table { border-collapse: collapse; font-size: 11px; width: 100%; }
+  .ztab table + table { margin-top: 5px; border-top: 1px solid var(--line); }
+  .ztab th { text-align: left; font-weight: 500; padding: 2px 10px 2px 0; white-space: nowrap; }
+  .ztab th span { display: inline-block; max-width: 118px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  .ztab td { text-align: right; padding: 2px 0 2px 10px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ztab thead th, .ztab thead td { font-family: inherit; font-size: 10px; font-weight: 400; color: var(--muted); padding-top: 3px; }
+  .ztab th i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid; margin-right: 6px; }
+  .ztab th i.ln { width: 10px; height: 3px; border: 0; border-radius: 2px; vertical-align: middle; }
+  .ztab tbody.st tr { cursor: zoom-in; }
+  .ztab tbody.st tr.on, .ztab tbody.st tr:hover { background: var(--chip); }
+  .ztab.wide { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 20px; }
+  .ztab.wide table { width: auto; }
+  .ztab.wide table + table { margin-top: 0; border-top: 0; }
+  .ztab.wide .zd { flex-basis: 100%; max-width: none; }
+  .ztab .zd { margin: 5px 0 0; padding-top: 4px; border-top: 1px solid var(--line); font-size: 10.5px; line-height: 1.35; color: var(--muted); max-width: 250px; }
   @media (min-width: 1700px) { #views { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: 1fr; } }
 
   /* ---- balance bar: total = sensible + latent */
