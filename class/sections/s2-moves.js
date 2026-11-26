@@ -119,12 +119,13 @@ export default {
         c.point(g0, O1, '', { r: 9 });
         const X2 = st(36, 0.42), g1 = F.at(1), M = mix(O1, 0.5, X2, 0.5);
         c.move(g1, O1, X2, { color: C.muted, arrow: false, dash: '8 6', w: 3 });
-        c.point(g1, X2, 'other air', { color: C.muted, size: 19, place: 'ul' });
-        c.point(g1, M, 'mixing box', { color: C.muted, size: 19, place: 'ul', r: 7 });
+        c.point(g1, X2, 'outdoor air', { color: C.muted, size: 19, place: 'ul' });
+        text(g1, c.X(O1.T) - 14, c.Y(O1.w) + 30, 'room air', { size: 19, color: C.muted, weight: 600, anchor: 'end' });
+        c.point(g1, M, 'mixing box', { color: C.muted, size: 19, place: 'dr', r: 7 });
       },
       steps: [
         { say: 'The eight directions from section 1, each with its machine. Now we open the machines **one at a time**.', tag: 'the eight directions' },
-        { say: 'Plus one move the compass does not show: two airs mixed land on the **straight line** between them. A mixing box.', tag: '— mixing' },
+        { say: 'Plus one move the compass does not show: outdoor air and room air mixed land on the **straight line** between them. A mixing box.', tag: '— mixing' },
       ],
     },
     // ------------------------------------------------------------ heating
@@ -192,26 +193,35 @@ export default {
         const g2 = F.at(2);
         el(g2, 'rect', { x: c.X(WET.tsMean) - 4, y: c.Y(0.018), width: 8, height: c.Y(0) - c.Y(0.018), fill: C.cold, opacity: 0.18 });
         text(g2, c.X(WET.tsMean) + 10, c.Y(0.0022), `fin surface ≈ ${N.wetSurf} °C`, { size: 18, color: C.cold, weight: 600 });
-        const g3 = F.at(3);
-        c.moves(g3, WET.path.filter((_, i) => i % 2 === 0 || i === WET.path.length - 1), { color: C.ink });
-        c.point(g3, WET.out, 'B', { color: C.cold, place: 'dl' });
-        [0, 1, 2].forEach(i => drop(g3, c.X(WET.tsMean) + 24 + i * 18, c.Y(0.0055) + (i % 2) * 12, 1.2));
-        F.states(3, PX, 30, [['A', WET_A, C.hot], ['B', WET.out, C.cold]], PW);
+        // air next to a fin: straight left to the dew point, then down the 100 % curve, shedding water
+        const g3 = F.at(3), Ts = WET.tsMean, tD = D.T;
+        const sat = Array.from({ length: 13 }, (_, i) => { const T = tD - (tD - Ts) * i / 12; return `${c.X(T)},${c.Y(wSat(T))}`; });
+        path(g3, `M${c.X(WET_A.T)},${c.Y(WET_A.w)} H${c.X(tD)}`, { color: C.sens, w: 4.5 });
+        path(g3, `M${sat.join(' L')}`, { color: C.vap, w: 5.5, arrow: true });
+        c.point(g3, { T: Ts, w: wSat(Ts) }, '', { color: C.vap, r: 7 });
+        text(g3, c.X(tD + 3), c.Y(WET_A.w) - 14, 'only cools', { size: 17, color: C.sens, weight: 600 });
+        [[0.25, 0], [0.5, 1], [0.75, 2]].forEach(([f, k]) => { const T = tD - (tD - Ts) * f; drop(g3, c.X(T) - 26 - k * 4, c.Y(wSat(T)) + 8, 1.1, C.water); });
+        text(g3, c.X(Ts) + 10, c.Y(wSat(Ts)) + 44, 'water condenses\nand drips off', { size: 17, color: C.water, weight: 600 });
         const g4 = F.at(4);
-        c.hline(g4, +N.hA, { color: C.sens, dash: null, w: 2.6, size: 17 });
-        c.hline(g4, +N.hB, { color: C.sens, dash: null, w: 2.6, size: 17 });
+        c.moves(g4, WET.path.filter((_, i) => i % 2 === 0 || i === WET.path.length - 1), { color: C.ink });
+        c.point(g4, WET.out, 'B', { color: C.cold, place: 'dl' });
+        F.states(4, PX, 30, [['A', WET_A, C.hot], ['B', WET.out, C.cold]], PW);
         const g5 = F.at(5);
-        path(g5, `M${c.X(WET_A.T)},${c.Y(WET_A.w)} V${c.Y(WET.out.w)}`, { color: C.vap, w: 7, opacity: 0.8 });
-        path(g5, `M${c.X(WET_A.T)},${c.Y(WET.out.w)} H${c.X(WET.out.T)}`, { color: C.sens, w: 7, opacity: 0.8 });
-        text(g5, c.X(WET_A.T) + 12, c.Y((WET_A.w + WET.out.w) / 2) + 6, `latent\n${N.wetL}`, { size: 19, color: C.vap, weight: 600 });
-        text(g5, c.X((WET_A.T + WET.out.T) / 2), c.Y(WET.out.w) + 28, `sensible ${N.wetS} kJ/kg`, { size: 19, color: C.sens, weight: 600, anchor: 'middle' });
-        F.formula(5, PX, 150, PW, S`\footnotesize\begin{aligned}\Delta h &= h_A - h_B\\ &= ${N.hA} - ${N.hB}\\ &= ${N.wetT}\ \text{kJ/kg}\end{aligned}`, [], 220);
+        c.hline(g5, +N.hA, { color: C.sens, dash: null, w: 2.6, size: 17 });
+        c.hline(g5, +N.hB, { color: C.sens, dash: null, w: 2.6, size: 17 });
+        const g6 = F.at(6);
+        path(g6, `M${c.X(WET_A.T)},${c.Y(WET_A.w)} V${c.Y(WET.out.w)}`, { color: C.vap, w: 7, opacity: 0.8 });
+        path(g6, `M${c.X(WET_A.T)},${c.Y(WET.out.w)} H${c.X(WET.out.T)}`, { color: C.sens, w: 7, opacity: 0.8 });
+        text(g6, c.X(WET_A.T) + 12, c.Y((WET_A.w + WET.out.w) / 2) + 6, `latent\n${N.wetL}`, { size: 19, color: C.vap, weight: 600 });
+        text(g6, c.X((WET_A.T + WET.out.T) / 2), c.Y(WET.out.w) + 28, `sensible ${N.wetS} kJ/kg`, { size: 19, color: C.sens, weight: 600, anchor: 'middle' });
+        F.formula(6, PX, 150, PW, S`\footnotesize\begin{aligned}\Delta h &= h_A - h_B\\ &= ${N.hA} - ${N.hB}\\ &= ${N.wetT}\ \text{kJ/kg}\end{aligned}`, [], 220);
       },
       steps: [
         { say: 'Warm, humid air entering a coil in summer: 27 °C and 55 %.', tag: 'A: 27 °C, 55 %' },
         { say: `Its dew point is **${N.wetDew} °C**.`, tag: `dew point ${N.wetDew} °C` },
         { say: `With chilled water at **7 °C** the fin surface is near **${N.wetSurf} °C**, below that dew point.`, tag: `surface ${N.wetSurf} °C, wet` },
-        { say: `Vapour condenses on the fins. The air leaves at **${N.wetOutT} °C** and **${N.wetOutW} g/kg**: cooler and drier.`, tag: 'B: cooler and drier' },
+        { say: `Follow the air that **touches a fin**: it first only cools, straight left, down to the dew point. From there it sits on the 100 % curve, so every further degree of cooling squeezes water out: it slides **down the curve** to ${N.wetSurf} °C and the water drips off the fins.`, tag: 'touching air: down the 100 % curve' },
+        { say: `Air that slips between the fins without touching stays near A. The air that leaves the coil is the mix of both, **B**: **${N.wetOutT} °C** and **${N.wetOutW} g/kg**, cooler and drier, off the curve.`, tag: 'B: cooler and drier' },
         { say: `Read the enthalpy on the diagonal scale: $h_A$ = ${N.hA} kJ/kg, $h_B$ = ${N.hB} kJ/kg.`, tag: 'h read on the scale' },
         { say: `The difference, **${N.wetT} kJ/kg**, splits into **${N.wetS}** sensible (horizontal) and **${N.wetL}** latent (vertical).`, tag: `${N.wetT} kJ/kg = sensible + latent` },
       ],
@@ -336,10 +346,14 @@ export default {
         c.move(F.at(1), R, roomLine(8), { color: C.room, arrow: false, dash: '10 7', w: 2.6 });
         text(F.at(1), c.X(20.5), c.Y(roomLine(20.5).w) + 46, `room line (SHR ${N.shrR}):\nsupply air on it removes\n2 parts sensible : 1 latent`, { size: 16, color: C.room, weight: 600 });
         c.point(F.at(2), SUP, 'S · supply air', { color: C.room, place: 'd', size: 19 });
+        c.move(F.at(2), SUP, R, { color: C.room, w: 4 });
+        text(F.at(2), c.X(20.5), c.Y(roomLine(20.5).w) + 118, 'S → R happens in the room:\nthe air picks up 20 kW of heat\nand 10 kW of moisture', { size: 16, color: C.room, weight: 600 });
         c.point(F.at(3), WET_A, 'A · coil inlet', { color: C.hot, place: 'ur', size: 19 });
         c.move(F.at(3), WET_A, RB, { color: C.cold });
+        text(F.at(3), c.X(21), c.Y(WET_A.w - (WET_A.w - RB.w) * 6 / (WET_A.T - RB.T)) - 14, 'cooling coil', { size: 17, color: C.cold, weight: 600, anchor: 'middle' });
         c.point(F.at(3), RB, 'B · coil outlet', { color: C.cold, place: 'l', size: 19 });
         c.move(F.at(5), RB, SUP, { color: C.hot });
+        text(F.at(5), c.X(SUP.T) + 10, c.Y(SUP.w) + 60, 'B → S: reheat', { size: 17, color: C.hot, weight: 600, anchor: 'end' });
         F.states(3, PX, 24, [['R', R, C.room], ['S', SUP, C.room], ['A', WET_A, C.hot], ['B', RB, C.cold]], PW);
         F.formula(1, PX, 250, PW, S`\footnotesize\begin{aligned} SHR &= \frac{\dot Q_s}{\dot Q_s+\dot Q_l}\\ \dot Q_{rh} &= \dot m_a\,c_p\,(T_S - T_B)\end{aligned}`,
           [['\\dot Q_s,\\,\\dot Q_l', 'room sensible, latent load, kW'], ['\\dot Q_{rh}', 'reheat power, kW']], 300);
@@ -347,19 +361,20 @@ export default {
       steps: [
         { say: `**R** is the room we want to keep: 25 °C and 50 %. It has **20 kW sensible** and **10 kW latent** load.`, tag: 'R: the room, the target' },
         { say: `SHR = 20 / 30 = ${N.shrR}. The purple **room line** holds every supply state that, warming and wetting up to R, takes up heat and water in exactly that 2 : 1 proportion.`, tag: `room line: SHR ${N.shrR}` },
-        { say: `How far along the line depends on the air flow. With ${M_S} kg/s it is **S, the supply air**: ${N.supT} °C, ${N.supW} g/kg. Air blown in at S keeps the room at R.`, tag: `S: supply air` },
+        { say: `How far along the line depends on the air flow. With ${M_S} kg/s it is **S, the supply air**: ${N.supT} °C, ${N.supW} g/kg. Inside the room, S warms and wets up along the line to **R** (the purple arrow): air blown in at S keeps the room at R.`, tag: `S → R: in the room` },
         { say: `The coil receives air at **A** (here 27 °C, 55 %, the mix of outdoor and room air). To dry it to ${N.supW} g/kg it must cool it to **B**, ${N.rbT} °C, almost saturated: ${N.qcoil2} kW.`, tag: `A → B: coil ${N.qcoil2} kW` },
         { say: `B has the right humidity but is too cold: blown in at B it would remove ${N.qover} kW of sensible heat instead of 20 kW, and the room would fall below 25 °C.`, tag: 'B alone overcools' },
         { say: `**Reheat** warms B to S at constant humidity: ${N.qrh} kW. Better with free heat (condenser heat, a heat pipe) than with a boiler or electric heater.`, tag: `reheat ${N.qrh} kW` },
+        { say: 'Follow the air round once: **A → B** in the cooling coil, **B → S** in the reheater, **S → R** in the room. Then it returns to the air handling unit and the loop starts again.', tag: 'A → B → S → R' },
       ],
     },
-    // ------------------------------------------------------------ humidifying
+    // ------------------------------------------------------------ humidifying: steam
     {
-      title: 'Humidification: steam humidifier and evaporative pad',
+      title: 'Humidification with steam: almost straight up',
       cite: 'ASHRAE HVAC Systems & Equipment 2024, ch. 22 · Humidifiers',
       fig(F) {
-        // steam: generator under the duct, lance across it
-        const gS = F.at(1);
+        // steam generator under the duct, lance across it
+        const gS = el(F.at(1), 'g', { transform: 'translate(240,0)' });
         path(gS, 'M20,40 H420 M20,140 H420', { color: C.ink, w: 2.2 });
         stream(gS, 30, 180, 90, C.hot, 2, 40);
         box(gS, 50, 160, 150, 44, { label: 'steam generator', size: 15, stroke: C.vap });
@@ -368,41 +383,72 @@ export default {
         for (let i = 0; i < 5; i++) { const y = 60 + i * 17; circle(gS, 250, y, 5, { fill: C.vapBg }); circle(gS, 266, y + 4, 7, { fill: C.vapBg }); }
         stream(gS, 300, 410, 90, C.vap, 2, 40);
         text(gS, 236, 30, 'distribution lance', { size: 15, color: C.vap, anchor: 'middle' });
-        // wet pad: honeycomb pad, header on top, tank and pump below
-        const gP = F.at(2);
-        path(gP, 'M470,40 H890 M470,140 H890', { color: C.ink, w: 2.2 });
-        stream(gP, 480, 620, 90, C.hot, 2, 40);
-        el(gP, 'rect', { x: 640, y: 40, width: 60, height: 100, fill: '#efe3c6', stroke: C.ink2, 'stroke-width': 1.5 });
-        for (let i = -4; i < 8; i++) { path(gP, `M${640 + i * 12},40 l60,100`, { color: '#b8a275', w: 1 }); path(gP, `M${700 - i * 12},40 l-60,100`, { color: '#b8a275', w: 1 }); }
-        path(gP, 'M630,30 H710', { color: C.water, w: 5 });
-        [650, 670, 690].forEach(x => drop(gP, x, 31, 0.6, C.water));
-        el(gP, 'rect', { x: 625, y: 160, width: 90, height: 36, fill: C.coldBg, stroke: C.water, 'stroke-width': 2 });
-        path(gP, 'M670,140 V160', { color: C.water, w: 2, dash: '3 4' });
-        circle(gP, 760, 178, 14, { fill: '#fff', stroke: C.ink2, 'stroke-width': 2 });
-        path(gP, 'M715,178 H746 M774,178 H790 V30 H710', { color: C.water, w: 3 });
-        stream(gP, 720, 880, 90, C.vap, 2, 40);
-        text(gP, 670, 222, 'tank', { size: 15, color: C.water, anchor: 'middle' });
-        text(gP, 800, 205, 'pump', { size: 15, color: C.ink2 });
-        text(gP, 600, 22, 'cellulose pad', { size: 15, color: C.ink2, anchor: 'end' });
+        text(gS, 10, 96, 'A', { size: 22, weight: 600, color: C.hot, anchor: 'end' });
+        text(gS, 430, 96, 'B', { size: 22, weight: 600, color: C.vap });
+        const c = F.chart({ ...CB, tMin: 0, tMax: 40, wMax: 0.012 });
+        c.axes(F.at(0), { wStep: 0.002 }); c.sat(F.at(0));
+        c.point(F.at(0), HUM_A, 'A · dry winter air', { color: C.hot, place: 'd', size: 19 });
+        c.move(F.at(2), HUM_A, HUM_ST, { color: C.vap, w: 4 });
+        c.point(F.at(2), HUM_ST, 'B · after the steam', { color: C.vap, place: 'ul', size: 19 });
+        F.states(2, PX, 240, [['A', HUM_A, C.hot], ['B', HUM_ST, C.vap]], PW);
+      },
+      steps: [
+        { say: 'Winter air heated to 22 °C but with only 3 g/kg: about 18 % RH. Too dry: it needs water vapour.', tag: 'A: 22 °C, 3 g/kg, too dry' },
+        { say: 'A **steam humidifier**: a generator boils water with electricity or gas, and a lance across the duct injects the steam.', tag: 'generator + lance' },
+        { say: `The water arrives already as vapour, so the air only gains moisture: A → B goes **almost straight up**, to ${g_kg(HUM_ST)} g/kg, warming by under a degree. All the energy is paid in the generator.`, tag: 'A → B: almost vertical' },
+      ],
+    },
+    // ------------------------------------------------------------ humidifying: wetted pad
+    {
+      title: 'Humidification with a wetted pad: heat first, then evaporate',
+      cite: 'ASHRAE HVAC Systems & Equipment 2024, ch. 22 · Humidifiers · RD 865/2003',
+      fig(F) {
+        // pre-heating coil, honeycomb pad with header on top, tank and pump below
+        const g0 = el(F.at(0), 'g', { transform: 'translate(-300,0)' });
+        path(g0, 'M470,40 H890 M470,140 H890', { color: C.ink, w: 2.2 });
+        stream(g0, 480, 620, 90, C.hot, 2, 40);
+        el(g0, 'rect', { x: 640, y: 40, width: 60, height: 100, fill: '#efe3c6', stroke: C.ink2, 'stroke-width': 1.5 });
+        for (let i = -4; i < 8; i++) { path(g0, `M${640 + i * 12},40 l60,100`, { color: '#b8a275', w: 1 }); path(g0, `M${700 - i * 12},40 l-60,100`, { color: '#b8a275', w: 1 }); }
+        path(g0, 'M630,30 H710', { color: C.water, w: 5 });
+        [650, 670, 690].forEach(x => drop(g0, x, 31, 0.6, C.water));
+        el(g0, 'rect', { x: 625, y: 160, width: 90, height: 36, fill: C.coldBg, stroke: C.water, 'stroke-width': 2 });
+        path(g0, 'M670,140 V160', { color: C.water, w: 2, dash: '3 4' });
+        circle(g0, 760, 178, 14, { fill: '#fff', stroke: C.ink2, 'stroke-width': 2 });
+        path(g0, 'M715,178 H746 M774,178 H790 V30 H710', { color: C.water, w: 3 });
+        stream(g0, 720, 880, 90, C.cold, 2, 40);
+        text(g0, 670, 222, 'tank', { size: 15, color: C.water, anchor: 'middle' });
+        text(g0, 800, 205, 'pump', { size: 15, color: C.ink2 });
+        text(g0, 670, 20, 'cellulose pad', { size: 15, color: C.ink2, anchor: 'middle' });
+        text(g0, 460, 96, 'A', { size: 22, weight: 600, color: C.hot, anchor: 'end' });
+        text(g0, 900, 96, 'B', { size: 22, weight: 600, color: C.cold });
+        // the pre-heating coil, added at step 3
+        const g3 = el(F.at(3), 'g', { transform: 'translate(-300,0)' });
+        hotCoil(g3, 560, 90);
+        text(g3, 560, 222, 'pre-heater', { size: 15, color: C.hot, anchor: 'middle', weight: 600 });
+        text(g3, 600, 132, 'H', { size: 20, weight: 600, color: C.hot });
         // chart
         const c = F.chart({ ...CB, tMin: 0, tMax: 40, wMax: 0.012 });
         c.axes(F.at(0), { wStep: 0.002 }); c.sat(F.at(0));
-        c.point(F.at(0), HUM_A, 'A', { color: C.hot, place: 'd', size: 20 });
-        c.move(F.at(1), HUM_A, HUM_ST, { color: C.vap });
-        c.point(F.at(1), HUM_ST, 'S', { color: C.vap, place: 'ul' });
-        c.move(F.at(2), HUM_A, PAD_ONLY, { color: C.cold, dash: '8 6' });
-        c.point(F.at(2), PAD_ONLY, 'P', { color: C.cold, place: 'ul', size: 19 });
-        c.move(F.at(3), HUM_A, HUM_PRE, { color: C.hot });
-        c.point(F.at(3), HUM_PRE, 'A′', { color: C.hot, place: 'r', size: 19 });
-        c.move(F.at(3), HUM_PRE, HUM_END, { color: C.vap });
-        c.point(F.at(3), HUM_END, 'D', { color: C.vap, place: 'ur', size: 19 });
-        F.states(3, PX, 240, [['A', HUM_A, C.hot], ['S', HUM_ST, C.vap], ['P', PAD_ONLY, C.cold], ['A′', HUM_PRE, C.hot], ['D', HUM_END, C.vap]], PW);
+        c.point(F.at(0), HUM_A, 'A · winter air', { color: C.hot, place: 'd', size: 17 });
+        const wb = twb(HUM_A.T, HUM_A.w);
+        c.move(F.at(1), HUM_A, { T: wb, w: wSat(wb) }, { color: C.vap, arrow: false, dash: '4 6', w: 2 });
+        text(F.at(1), c.X(wb) - 10, c.Y(wSat(wb)) - 10, 'wet-bulb line', { size: 16, color: C.vap, weight: 600, anchor: 'end' });
+        c.move(F.at(2), HUM_A, PAD_ONLY, { color: C.muted, dash: '8 6', w: 3 });
+        c.point(F.at(2), PAD_ONLY, 'P · pad alone', { color: C.muted, place: 'ul', size: 17 });
+        c.move(F.at(3), HUM_A, HUM_PRE, { color: C.hot, w: 4 });
+        c.point(F.at(3), HUM_PRE, 'H · pre-heated', { color: C.hot, place: 'd', size: 17 });
+        c.move(F.at(4), HUM_PRE, HUM_END, { color: C.cold, w: 4 });
+        c.point(F.at(4), HUM_END, 'B · after pad', { color: C.cold, place: 'ul', size: 17 });
+        F.states(2, PX, 240, [['A', HUM_A, C.hot], ['P', PAD_ONLY, C.muted]], PW);
+        F.states(3, PX, 362, [['H', HUM_PRE, C.hot]], PW);
+        F.states(4, PX, 452, [['B', HUM_END, C.cold]], PW);
       },
       steps: [
-        { say: 'Winter air heated to 22 °C but with only 3 g/kg: about 18 % RH. It needs water vapour.', tag: 'A: 22 °C, 3 g/kg' },
-        { say: '**Steam humidifier**: a generator boils water and a lance injects the steam into the duct. The vapour arrives already evaporated, so A moves **almost vertically** (A → S); the energy is spent in the generator.', tag: 'steam: almost vertical' },
-        { say: '**Evaporative pad**: a cellulose honeycomb wetted from a header, with a pump recirculating water from a tank. The water evaporates with the air’s own heat, along the wet-bulb line (A → P): the air humidifies **and cools**.', tag: 'pad: along the wet bulb' },
-        { say: `To end at 22 °C the air is first heated to about **${N.pre} °C** (A → A′), then crosses the pad (A′ → D). With either device the water must be treated against Legionella (RD 865/2003).`, tag: 'pad needs pre-heating' },
+        { say: 'Same dry winter air A, now through a **wetted pad**: a cellulose honeycomb wetted from a header, with a pump recirculating water from a tank.', tag: 'A through a wet pad' },
+        { say: 'Here the water evaporates **using the air’s own heat**. The air gains moisture and loses temperature, keeping its enthalpy: it moves along the **wet-bulb line**.', tag: 'along the wet-bulb line' },
+        { say: `Alone, the pad takes A to **P**: more moisture, but the air falls to about ${N.padOnly} °C. Too cold to supply.`, tag: `P: pad alone, ${N.padOnly} °C` },
+        { say: `So a coil **pre-heats** the air first, A → **H**, to about ${N.pre} °C, at constant humidity.`, tag: `A → H: pre-heat to ${N.pre} °C` },
+        { say: 'Then the pad, H → **B**: it ends at 22 °C with the moisture we wanted. The stored water must be treated against Legionella (RD 865/2003).', tag: 'H → B: pad, 22 °C' },
       ],
     },
     // ------------------------------------------------------------ evaporative cooling

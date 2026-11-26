@@ -287,18 +287,26 @@ export default {
         text(F.at(2), c.X(R.T) + 14, c.Y(R.w - 0.004) + 4, 'only latent', { size: 21, color: C.vap, weight: 600 });
         // room ratio line for SHR 0.75
         const SHR = 0.75, line = T => ({ T, w: R.w - 1.02 * (R.T - T) * (1 - SHR) / SHR / 2501 });
-        const S = line(13);
-        c.move(F.at(3), R, line(9), { color: C.room, arrow: false, dash: '10 7', w: 3 });
-        text(F.at(3), c.X(17), c.Y(line(17).w) + 36, 'room line · SHR 0.75', { size: 21, color: C.room, weight: 600 });
+        // where the room line meets saturation: the coldest supply air on it
+        let lo = 0, hi = R.T; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (line(m).w > wSat(m)) lo = m; else hi = m; }
+        const tEnd = (lo + hi) / 2, S = line(13), S18 = line(18);
+        c.move(F.at(3), R, line(tEnd), { color: C.room, arrow: false, dash: '10 7', w: 3 });
+        text(F.at(3), c.X(19), c.Y(line(19).w) + 40, 'room line · SHR 0.75', { size: 21, color: C.room, weight: 600 });
+        c.point(F.at(4), S18, '', { color: C.muted, r: 8 });
+        text(F.at(4), c.X(18), c.Y(S18.w) - 22, '18 °C: 1.7 × the air', { size: 18, color: C.muted, weight: 600, anchor: 'middle' });
         c.point(F.at(4), S, 'S  supply 13 °C', { color: C.cold, place: 'dl' });
         c.move(F.at(4), S, R, { color: C.cold, w: 3.5 });
+        const E = { T: tEnd, w: wSat(tEnd) }, g5 = F.at(5);
+        circle(g5, c.X(E.T), c.Y(E.w), 9, { fill: '#fff', stroke: C.hot, 'stroke-width': 2.5 });
+        text(g5, c.X(E.T) - 14, c.Y(E.w) - 34, `${fx(tEnd, 0)} °C, 100 %:\nnot reachable`, { size: 18, color: C.hot, weight: 600, anchor: 'end' });
       },
       steps: [
         { say: 'From the room point R, every change has a direction.', tag: 'directions from R' },
         { say: 'Removing only **sensible** heat: straight left.', tag: 'sensible: horizontal' },
         { say: 'Removing only **water**: straight down.', tag: 'latent: vertical' },
         { say: 'A real room needs both. Its mix, the **sensible heat ratio** SHR = sensible / total, sets one slope: the **room line**.', tag: 'SHR sets the room line' },
-        { say: 'Air supplied anywhere on that line, here at 13 °C, absorbs **exactly** the room’s mix. Finding that point is the start of every design.', tag: 'supply air sits on it' },
+        { say: 'Air supplied anywhere on that line absorbs **exactly** the room’s mix. Which point? The colder the supply, the **less air** we need: at 18 °C (7 K below the room) we would move 1.7 times the air of 13 °C (12 K below).', tag: 'colder supply, less air' },
+        { say: 'But the line ends where it meets the 100 % curve, and a real coil delivers air at 90–95 %, not saturated. Very cold air also causes draughts at the diffusers. **About 13 °C** is the usual compromise; finding S is the start of every design.', tag: '13 °C: the usual compromise' },
       ],
     },
     {

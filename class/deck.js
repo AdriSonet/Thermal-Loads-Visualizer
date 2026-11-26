@@ -23,11 +23,12 @@ const FIG = { split: [900, 640], wide: [1500, 560] };
 const esc = s => String(s).replace(/&(?![a-z#0-9]+;)/gi, '&amp;');
 // a bad formula must show as red source text, never break the slide
 if (window.katex) { const render = katex.renderToString; katex.renderToString = (s, o = {}) => render(s, { throwOnError: false, ...o }); }
-const tex = (src, display = false) => window.katex ? katex.renderToString(src, { displayMode: display, throwOnError: false }) : src;
+// output 'mathml' for the speaker notes: their window has no KaTeX stylesheet, so the HTML copy would show twice
+const tex = (src, display = false, output = 'htmlAndMathml') => window.katex ? katex.renderToString(src, { displayMode: display, throwOnError: false, output }) : src;
 // **bold**, _italic_, $inline maths$ and $$display maths$$ (LaTeX, rendered with KaTeX)
-const md = s => String(s).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/).map(seg =>
-  seg.startsWith('$$') ? tex(seg.slice(2, -2), true)
-  : seg.length > 2 && seg.startsWith('$') && seg.endsWith('$') ? tex(seg.slice(1, -1))
+const md = (s, out) => String(s).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/).map(seg =>
+  seg.startsWith('$$') ? tex(seg.slice(2, -2), true, out)
+  : seg.length > 2 && seg.startsWith('$') && seg.endsWith('$') ? tex(seg.slice(1, -1), false, out)
   : esc(seg).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|\W)_([^_]+)_(?=\W|$)/g, '$1<i>$2</i>')).join('');
 const fmt = (v, d = 1) => (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toFixed(d).replace('-', '−');
 const stepOf = s => typeof s === 'string' ? { say: s } : s;
@@ -119,7 +120,7 @@ function build(spec, sec) {
     head('foot', `<span>Airport Building Systems · HVAC</span><span>${md(spec.cite ?? '')}</span>`);
   }
   const notes = [spec.notes, ...(spec.steps ?? []).map(stepOf).map((x, i) => `${i}. ${x.say}`)].filter(Boolean);
-  if (notes.length) { const a = document.createElement('aside'); a.className = 'notes'; a.innerHTML = notes.map(n => `<p>${md(n)}</p>`).join(''); s.appendChild(a); }
+  if (notes.length) { const a = document.createElement('aside'); a.className = 'notes'; a.innerHTML = notes.map(n => `<p>${md(n, 'mathml')}</p>`).join(''); s.appendChild(a); }
   return s;
 }
 
