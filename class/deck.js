@@ -17,8 +17,12 @@ import S3 from './sections/s3-ahu.js';
 import S4 from './sections/s4-plant.js';
 import S5 from './sections/s5-systems.js';
 import S6 from './sections/s6-design.js';
+import S7 from './sections/s7-fooled.js';
 
-const SECTIONS = [S0, S1, S2, S3, S4, S5, S6];
+// ?deck=fooled opens the short "Don't get fooled" deck on its own
+const DECK = new URLSearchParams(location.search).get('deck');
+const SECTIONS = DECK === 'fooled' ? [{ ...S7, n: 0 }] : [S0, S1, S2, S3, S4, S5, S6];
+if (DECK === 'fooled') document.title = 'Don’t get fooled · Airport Building Systems';
 const FIG = { split: [900, 640], wide: [1500, 560] };
 const esc = s => String(s).replace(/&(?![a-z#0-9]+;)/gi, '&amp;');
 // a bad formula must show as red source text, never break the slide
@@ -112,7 +116,7 @@ function build(spec, sec) {
     head('sec-title', md(spec.title));
     if (spec.sub) head('sec-sub', md(spec.sub));
   } else {
-    head('kicker', md(spec.kicker ?? `${sec.n} · ${sec.name}`));
+    head('kicker', md(spec.kicker ?? sec.kicker ?? `${sec.n} · ${sec.name}`));
     head('title', md(spec.title));
     if (spec.fig) makeFig(head('fig', ''), layout, spec);
     if (spec.html) head('body', spec.html).querySelectorAll('[data-step]').forEach(n => fragment(n, +n.dataset.step, n.dataset.cls));

@@ -389,7 +389,7 @@ export default {
         c.axes(F.at(0), { wStep: 0.002 }); c.sat(F.at(0));
         c.point(F.at(0), HUM_A, 'A · dry winter air', { color: C.hot, place: 'd', size: 19 });
         c.move(F.at(2), HUM_A, HUM_ST, { color: C.vap, w: 4 });
-        c.point(F.at(2), HUM_ST, 'B · after the steam', { color: C.vap, place: 'ul', size: 19 });
+        c.point(F.at(2), HUM_ST, 'B · after the steam', { color: C.vap, place: 'r', size: 19 });
         F.states(2, PX, 240, [['A', HUM_A, C.hot], ['B', HUM_ST, C.vap]], PW);
       },
       steps: [

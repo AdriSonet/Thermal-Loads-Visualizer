@@ -131,3 +131,6 @@ html, body { background: var(--paper); }
 .reveal table.grid th { background: var(--upc); color: #fff; font-size: 17px; letter-spacing: .03em; }
 .reveal table.grid td { border-left: 1px solid var(--line2); }
 .reveal table.grid tr:nth-child(even) td { background: #f6f8fb; }
+
+/* a highlighted conclusion inside a drawing */
+.reveal .note-box { background: #fff; border: 2px solid var(--upc); border-radius: 12px; padding: 14px 18px; font: 19px/1.4 Arial, sans-serif; color: var(--ink2); }
