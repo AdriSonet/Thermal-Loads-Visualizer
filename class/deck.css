@@ -1,0 +1,133 @@
+/* Class deck: light paper, black ink, red = warm, blue = cold, orange = sensible, grey-blue = water. */
+:root {
+  --ink: #1b1b1b; --ink2: #3a3a3a; --muted: #6e6b66; --soft: #a29d95; --line: #d6d1c8; --line2: #ece8e1;
+  --paper: #fbfaf7; --hot: #c8442f; --cold: #2f6fc0; --vap: #6f8aa6; --sens: #d98a2b; --green: #3f7f4f;
+}
+html, body { background: var(--paper); }
+.reveal { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); font-size: 30px; }
+.reveal .slides { text-align: left; }
+.reveal .slides > section { height: 900px; padding: 0; }
+.reveal b { font-weight: 600; color: var(--ink); }
+.reveal .progress { color: var(--ink); height: 4px; }
+.reveal .slide-number { background: transparent; color: var(--muted); font: 14px "Helvetica Neue", Helvetica, Arial, sans-serif; right: 26px; bottom: 18px; }
+.reveal .controls { color: var(--ink2); }
+.reveal .err { color: var(--hot); }
+.mono, .reveal .num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+
+/* --- header and footer of content slides */
+.reveal .kicker { position: absolute; top: 40px; left: 70px; font-size: 18px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.reveal .title { position: absolute; top: 70px; left: 70px; right: 70px; font-size: 50px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+.reveal .foot { position: absolute; left: 70px; right: 230px; bottom: 16px; display: flex; justify-content: space-between; gap: 30px; font-size: 15px; color: var(--soft); white-space: nowrap; }
+.reveal .foot span:last-child { overflow: hidden; text-overflow: ellipsis; }
+
+/* --- split: drawing left, sentences right */
+.reveal .L-split .fig { position: absolute; left: 40px; top: 175px; width: 960px; height: 682px; }
+.reveal .fig-svg { width: 100%; height: 100%; overflow: visible; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.reveal .says.split { position: absolute; left: 1030px; right: 64px; top: 190px; bottom: 60px; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.reveal .say { margin: 0; }
+.reveal .say .tag { display: none; }
+.reveal .says.split .say .full { font-size: 31px; line-height: 1.36; color: var(--ink2); display: block; animation: rise .45s ease; }
+/* only the current step is on screen: what came before is already in the figure and its table */
+.reveal .says .say.fragment.visible:not(.current-fragment),
+.reveal .says:has(.say.fragment.visible) .say.s0 { display: none; }
+.reveal .says .say .tag::before { content: ''; position: absolute; left: 2px; top: .62em; width: 10px; height: 2px; background: var(--soft); }
+.reveal .says .say .tag b { color: var(--muted); font-weight: 500; }
+.reveal .says .say.fragment:not(.visible) { display: none; }
+.reveal .says .say.fragment { transition: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* --- wide: drawing across, one sentence under it */
+.reveal .L-wide .fig { position: absolute; left: 50px; right: 50px; top: 168px; height: 560px; }
+.reveal .says.wide { position: absolute; left: 70px; right: 70px; top: 750px; height: 110px; }
+.reveal .says.wide .say { position: absolute; inset: 0; }
+.reveal .says.wide .say .full { font-size: 30px; line-height: 1.35; color: var(--ink2); display: block; animation: rise .45s ease; }
+.reveal .says.wide .say.fragment.visible:not(.current-fragment), .reveal .says.wide:has(.say.fragment.visible) .say.s0 { display: none; }
+
+/* --- text slides: free HTML */
+.reveal .L-text .body { position: absolute; left: 70px; right: 70px; top: 190px; bottom: 60px; font-size: 30px; line-height: 1.4; color: var(--ink2); }
+.reveal .L-text .says.text { position: absolute; left: 70px; right: 70px; bottom: 56px; }
+.reveal .L-text .says.text .say .full { font-size: 28px; color: var(--ink2); animation: rise .45s ease; }
+.reveal .L-text .says.text .say.fragment.visible:not(.current-fragment), .reveal .L-text .says.text:has(.say.fragment.visible) .say.s0 { display: none; }
+.reveal .body ul { margin: 0; padding-left: 1.1em; }
+.reveal .body li { margin: .25em 0; }
+.reveal .cols { display: grid; grid-template-columns: repeat(var(--n, 2), 1fr); gap: 28px; }
+.reveal .card { background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 22px 26px; font-size: 25px; line-height: 1.38; }
+.reveal .card h4 { margin: 0 0 10px; font-size: 27px; font-weight: 600; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.reveal .card.hot { border-color: var(--hot); } .reveal .card.cold { border-color: var(--cold); } .reveal .card.green { border-color: var(--green); }
+.reveal .muted { color: var(--muted); }
+.reveal table.grid { border-collapse: collapse; font-size: 23px; width: 100%; }
+.reveal table.grid th, .reveal table.grid td { border: 0; border-bottom: 1.5px solid var(--line2); padding: 10px 12px; text-align: left; vertical-align: top; }
+.reveal table.grid th { font-weight: 600; color: var(--muted); font-size: 18px; text-transform: uppercase; letter-spacing: .06em; }
+.reveal table.grid td.y { color: var(--green); font-weight: 600; } .reveal table.grid td.n { color: var(--hot); } .reveal table.grid td.m { color: var(--sens); }
+.reveal .big { font-size: 44px; line-height: 1.2; font-weight: 600; color: var(--ink); }
+.reveal .formula { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 30px; background: #fff; border: 1.5px solid var(--line); border-radius: 12px; padding: 14px 22px; display: inline-block; color: var(--ink); }
+
+/* --- title and section slides */
+.reveal .L-title .t-kicker { position: absolute; top: 230px; left: 110px; font-size: 22px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.reveal .L-title .t-title { position: absolute; top: 280px; left: 110px; right: 160px; font-size: 82px; line-height: 1.04; font-weight: 600; letter-spacing: -.03em; }
+.reveal .L-title .t-sub { position: absolute; top: 590px; left: 110px; right: 300px; font-size: 30px; line-height: 1.4; color: var(--ink2); }
+.reveal .L-title .t-html { position: absolute; left: 110px; right: 110px; bottom: 70px; font-size: 20px; color: var(--muted); }
+.reveal .L-section .sec-n { position: absolute; top: 250px; left: 110px; font: 600 150px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--line); }
+.reveal .L-section .sec-title { position: absolute; top: 430px; left: 110px; right: 200px; font-size: 76px; line-height: 1.05; font-weight: 600; letter-spacing: -.03em; }
+.reveal .L-section .sec-sub { position: absolute; top: 620px; left: 110px; right: 300px; font-size: 30px; line-height: 1.4; color: var(--muted); }
+
+/* --- SVG step animation: a traced path draws itself when its step appears */
+.reveal .fragment .trace { stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.1s cubic-bezier(.45,.05,.3,1) .1s; }
+.reveal .fragment.visible .trace { stroke-dashoffset: 0; }
+.reveal svg g.fragment { transition: opacity .45s ease, visibility .45s; }
+
+/* --- live controls (interactive slides) */
+.reveal .pick { display: flex; gap: 10px; flex-wrap: wrap; }
+.reveal .pick button { font: 500 21px "Helvetica Neue", Helvetica, Arial, sans-serif; border: 1.5px solid var(--line); background: #fff; color: var(--ink2); border-radius: 10px; padding: 9px 16px; cursor: pointer; }
+.reveal .pick button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.reveal .pick button:hover:not(.on) { border-color: var(--ink2); }
+
+@media print { .reveal .says .say .full { animation: none; } }
+
+/* --- HTML inside drawings: formulas (KaTeX) and tables of states */
+.reveal .fo { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink2); }
+.reveal .fo-formula { background: rgba(255,255,255,.94); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 18px 12px; display: inline-block; }
+.reveal .fo-formula .eq .katex-display { margin: 8px 0; }
+.reveal .fo-formula .katex { font-size: 1.12em; }
+.reveal .fo-formula .where { font-size: 19px; line-height: 1.35; color: var(--muted); }
+.reveal .fo-formula .where em { font-style: italic; display: block; margin-bottom: 2px; }
+.reveal .fo-formula .where div { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: baseline; }
+.reveal .fo-formula .where .katex { font-size: 1em; color: var(--ink); }
+.reveal .fo-states { background: rgba(255,255,255,.94); border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 10px; display: inline-block; }
+.reveal .fo-states table { border-collapse: collapse; font: 17px "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+.reveal .fo-states th { font: 600 13px "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--muted); text-align: right; padding: 2px 8px; letter-spacing: .03em; }
+.reveal .fo-states td { text-align: right; padding: 3px 8px; border-top: 1px solid var(--line2); }
+.reveal .fo-states td:first-child { text-align: left; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.reveal .says .katex { font-size: 1.05em; }
+
+/* ===== UPC corporate identity (Manual d'identitat corporativa, presentation template):
+   16:9, UPC mark top-left on every slide, Helvetica Neue / Arial, blue #016AB4, blue cover and section slides */
+:root { --upc: #016AB4; }
+.reveal { font-variant-numeric: tabular-nums; }
+.reveal b, .reveal .title, .reveal .card h4 { font-weight: 700; }
+.reveal .upc-logo { position: absolute; top: 34px; left: 70px; height: 50px; width: auto; z-index: 2; }
+.reveal .kicker { top: 48px; left: auto; right: 70px; text-align: right; color: var(--upc); font-weight: 700; font-size: 17px; }
+.reveal .title { top: 104px; font-size: 46px; letter-spacing: -.01em; }
+.reveal .L-split .fig, .reveal .L-wide .fig { top: 182px; }
+.reveal .says.split { top: 196px; }
+.reveal .L-text .body { top: 196px; }
+.reveal .slide-number { font: 15px Arial, sans-serif; }
+.reveal .progress { color: var(--upc); }
+/* cover and section dividers: white on UPC blue */
+.reveal .L-title, .reveal .L-section { color: #fff; }
+.reveal .L-title .upc-logo, .reveal .L-section .upc-logo { top: 50px; left: 110px; height: 66px; }
+.reveal .L-title .t-kicker, .reveal .L-title .t-sub, .reveal .L-title .t-html, .reveal .L-section .sec-sub { color: rgba(255,255,255,.88); }
+.reveal .L-title .t-title, .reveal .L-section .sec-title { font-weight: 700; letter-spacing: -.015em; color: #fff; }
+.reveal .L-section .sec-n { font-family: Arial, sans-serif; font-weight: 700; color: rgba(255,255,255,.28); }
+/* tables: a real header row and ruled cells */
+.reveal .fo-states { padding: 0; border: 1.5px solid var(--upc); border-radius: 8px; overflow: hidden; }
+.reveal .fo-states table { font: 18px Arial, sans-serif; font-variant-numeric: tabular-nums; }
+.reveal .fo-states th { background: var(--upc); color: #fff; font: 700 15px Arial, sans-serif; padding: 6px 10px; text-align: right; letter-spacing: 0; }
+.reveal .fo-states th:first-child { text-align: left; }
+.reveal .fo-states td { padding: 4px 10px; border-top: 1px solid var(--line); border-left: 1px solid var(--line2); }
+.reveal .fo-states td:first-child { border-left: 0; }
+.reveal .fo-states tr:nth-child(odd) td { background: #f6f8fb; }
+.reveal table.grid { border: 1.5px solid var(--upc); }
+.reveal table.grid th { background: var(--upc); color: #fff; font-size: 17px; letter-spacing: .03em; }
+.reveal table.grid td { border-left: 1px solid var(--line2); }
+.reveal table.grid tr:nth-child(even) td { background: #f6f8fb; }

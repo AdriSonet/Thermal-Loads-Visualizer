@@ -35,6 +35,10 @@ Starting conditions come from the simulated lounge. Everything else is calculate
 node --test "systems/tests/*.test.mjs"
 ```
 
+## Class slides
+
+`class/` is a Reveal.js deck for one 2-hour session on psychrometrics and HVAC systems: moist air properties and the psychrometric chart, psychrometric processes and equipment, the air handling unit by outdoor condition, heat and cold generation (boilers, refrigeration cycle, refrigerants), HVAC system types, and design and dimensioning for Practicum Exercise 3. Open <http://localhost:5181/class/>; → advances one idea at a time, S opens the speaker notes, O the overview, F full screen, and `?print-pdf` prints it with one page per step. The outline is in `class/OUTLINE.md`; each section is one file in `class/sections/`, and every number is computed with the same `systems/psychro.js` and `systems/models.js`. Reveal.js loads from a CDN.
+
 ## Files
 
 - `index.html`: the 3D room.
